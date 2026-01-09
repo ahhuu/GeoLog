@@ -1,0 +1,66 @@
+plugins {
+    id 'com.android.application'
+    id 'com.google.android.libraries.mapsplatform.secrets-gradle-plugin'
+}
+
+android {
+    compileSdk 33
+
+    defaultConfig {
+        applicationId "cn.swjtu.geolog"
+        minSdk 24
+        targetSdk 33
+        versionCode 2
+        versionName "2.0"
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+    // 自定义打包名称
+    android.applicationVariants.all { variant ->
+        variant.outputs.all {
+            outputFileName = "GeoLog_${buildType.name}_v${versionName}.apk"
+        }
+    }
+/*    //构建时间
+    def generateTime() {
+        return new Date().format("yyyy_MM_dd_HH_mm_ss")
+    }*/
+
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+
+dependencies {
+
+    implementation 'androidx.appcompat:appcompat:1.4.2'
+    implementation 'com.google.android.gms:play-services-base:18.2.0'
+    implementation 'com.google.android.gms:play-services-location:21.0.1'
+    implementation 'com.google.android.gms:play-services-maps:18.1.0'
+    implementation 'androidx.localbroadcastmanager:localbroadcastmanager:1.1.0'
+    implementation project(':pseudorange')
+    implementation files('libs/achartengine-1.2.0.jar')
+    implementation("com.google.guava:guava:31.1-android")
+    implementation 'com.google.android.material:material:1.6.1'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.4.0'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.3'
+    testImplementation 'junit:junit:4.13.2'
+    implementation "androidx.core:core:1.8.0"
+}
+
+
+secrets {
+    // To add your Maps API key to this project:
+    // 1. Open the file local.properties found under the root project
+    // 2. Add this line, where YOUR_API_KEY is your API key:
+    //        MAPS_API_KEY=YOUR_API_KEY
+    defaultPropertiesFileName 'local.defaults.properties'
+}
