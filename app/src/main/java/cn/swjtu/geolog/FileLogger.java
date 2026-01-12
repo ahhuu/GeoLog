@@ -55,9 +55,6 @@ public class FileLogger implements MeasurementListener {
   private static final char RECORD_DELIMITER = ',';
   private static final String VERSION_TAG = "Version: ";
 
-
-  // New RinexLogger integration
-  private static final String RINEX_FILE_PREFIX = "RINEX";
   private final RinexLogger mRinexLogger;
 
   private final Context mContext;
@@ -90,7 +87,9 @@ public class FileLogger implements MeasurementListener {
       // 尝试在根目录下创建 GeoLog 文件夹 (需要权限)
       if (Environment.MEDIA_MOUNTED.equals(state)) {
         baseDirectory = new File(Environment.getExternalStorageDirectory(), "GeoLog");
-        baseDirectory.mkdirs();
+        if (!baseDirectory.exists()) {
+             baseDirectory.mkdirs();
+        }
         if (!baseDirectory.exists() || !baseDirectory.canWrite()) {
              // 回退到只有应用自己能访问的目录
              baseDirectory = new File(mContext.getExternalFilesDir(null), FILE_PREFIX);
@@ -150,7 +149,7 @@ public class FileLogger implements MeasurementListener {
         currentFileWriter.newLine();
         currentFileWriter.write(COMMENT_START);
         currentFileWriter.write(
-                "Raw,ElapsedRealtimeMillis,TimeNanos,LeapSecond,TimeUncertaintyNanos,FullBiasNanos,"
+                "Raw,utcTimeMillis,TimeNanos,LeapSecond,TimeUncertaintyNanos,FullBiasNanos,"
                         + "BiasNanos,BiasUncertaintyNanos,DriftNanosPerSecond,DriftUncertaintyNanosPerSecond,"
                         + "HardwareClockDiscontinuityCount,Svid,TimeOffsetNanos,State,ReceivedSvTimeNanos,"
                         + "ReceivedSvTimeUncertaintyNanos,Cn0DbHz,PseudorangeRateMetersPerSecond,"
@@ -158,7 +157,15 @@ public class FileLogger implements MeasurementListener {
                         + "AccumulatedDeltaRangeState,AccumulatedDeltaRangeMeters,"
                         + "AccumulatedDeltaRangeUncertaintyMeters,CarrierFrequencyHz,CarrierCycles,"
                         + "CarrierPhase,CarrierPhaseUncertainty,MultipathIndicator,SnrInDb,"
-                        + "ConstellationType,AgcDb");
+                        + "ConstellationType,AgcDb,BasebandCn0DbHz,FullInterSignalBiasNanos,"
+                        + "FullInterSignalBiasUncertaintyNanos,SatelliteInterSignalBiasNanos,"
+                        + "SatelliteInterSignalBiasUncertaintyNanos,CodeType,ChipsetElapsedRealtimeNanos,"
+                        + "IsFullTracking,SvPositionEcefXMeters,SvPositionEcefYMeters,"
+                        + "SvPositionEcefZMeters,SvVelocityEcefXMetersPerSecond,"
+                        + "SvVelocityEcefYMetersPerSecond,SvVelocityEcefZMetersPerSecond,SvClockBiasMeters,"
+                        + "SvClockDriftMetersPerSecond,KlobucharAlpha0,KlobucharAlpha1,"
+                        + "KlobucharAlpha2,KlobucharAlpha3,KlobucharBeta0,KlobucharBeta1,"
+                        + "KlobucharBeta2,KlobucharBeta3");
         currentFileWriter.newLine();
         currentFileWriter.write(COMMENT_START);
         currentFileWriter.newLine();
@@ -292,26 +299,6 @@ public class FileLogger implements MeasurementListener {
   @Override
   public void onProviderDisabled(String provider) {}
 
-  private String getConstellationCode(int constellationType) {
-    switch (constellationType) {
-      case GnssStatus.CONSTELLATION_GPS:
-        return "G";
-      case GnssStatus.CONSTELLATION_GLONASS:
-        return "R";
-      case GnssStatus.CONSTELLATION_BEIDOU:
-        return "C";
-      case GnssStatus.CONSTELLATION_GALILEO:
-        return "E";
-      case GnssStatus.CONSTELLATION_QZSS:
-        return "J";
-      case GnssStatus.CONSTELLATION_SBAS:
-        return "S";
-      case GnssStatus.CONSTELLATION_IRNSS:
-        return "I";
-      default:
-        return "?";
-    }
-  }
 
   @Override
   public void onLocationChanged(Location location) {
@@ -435,10 +422,117 @@ public class FileLogger implements MeasurementListener {
 
   private void writeGnssMeasurementToFile(GnssClock clock, GnssMeasurement measurement)
           throws IOException {
+    String utcTimeMillisStr = "";
+
+// TOW 已解算（前提）
+    boolean towDecoded =
+            (measurement.getState() & GnssMeasurement.STATE_TOW_DECODED) != 0;
+
+    if (towDecoded
+            && clock.hasFullBiasNanos()
+            && clock.hasBiasNanos()
+            && clock.hasLeapSecond()) {
+
+      long gpsTimeNanos =
+              clock.getTimeNanos()
+                      - clock.getFullBiasNanos()
+                      - (long) clock.getBiasNanos();
+
+      long utcTimeNanos =
+              gpsTimeNanos
+                      - clock.getLeapSecond() * 1_000_000_000L;
+
+      utcTimeMillisStr = String.valueOf(utcTimeNanos / 1_000_000L);
+    } else {
+      // GNSS 时间尚未物理成立 留空
+      utcTimeMillisStr = "";
+    }
+
+
+    String chipsetElapsedRealtimeNanos = "";
+    // ChipsetElapsedRealtimeNanos
+    // We use SystemClock.elapsedRealtimeNanos() to represent the time since boot in nanoseconds
+    // at the time of data processing. This is a standard substitution for Chipset Elapsed Time
+    // when the specific GNSS chipset time aligned to elapsed realtime is not directly exposed.
+    chipsetElapsedRealtimeNanos = String.valueOf(SystemClock.elapsedRealtimeNanos());
+
+    String basebandCn0DbHz = "";
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && measurement.hasBasebandCn0DbHz()) {
+      basebandCn0DbHz = String.valueOf(measurement.getBasebandCn0DbHz());
+    }
+
+    String fullInterSignalBiasNanos = "";
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && measurement.hasFullInterSignalBiasNanos()) {
+      fullInterSignalBiasNanos = String.valueOf(measurement.getFullInterSignalBiasNanos());
+    } else {
+        fullInterSignalBiasNanos = "-1"; // Invalid value
+    }
+
+    String fullInterSignalBiasUncertaintyNanos = "";
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+            && measurement.hasFullInterSignalBiasUncertaintyNanos()) {
+      fullInterSignalBiasUncertaintyNanos =
+              String.valueOf(measurement.getFullInterSignalBiasUncertaintyNanos());
+    } else {
+        fullInterSignalBiasUncertaintyNanos = "-1";
+    }
+
+    String satelliteInterSignalBiasNanos = "";
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+            && measurement.hasSatelliteInterSignalBiasNanos()) {
+      satelliteInterSignalBiasNanos = String.valueOf(measurement.getSatelliteInterSignalBiasNanos());
+    } else {
+        satelliteInterSignalBiasNanos = "-1";
+    }
+
+    String satelliteInterSignalBiasUncertaintyNanos = "";
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+            && measurement.hasSatelliteInterSignalBiasUncertaintyNanos()) {
+      satelliteInterSignalBiasUncertaintyNanos =
+              String.valueOf(measurement.getSatelliteInterSignalBiasUncertaintyNanos());
+    } else {
+        satelliteInterSignalBiasUncertaintyNanos = "-1";
+    }
+
+    String codeType = "";
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && measurement.hasCodeType()) {
+      codeType = measurement.getCodeType();
+    }
+
+    String isFullTrackingStr;
+
+    long state = measurement.getState();
+
+// 1. 码跟踪
+    boolean codeLock =
+            (state & GnssMeasurement.STATE_CODE_LOCK) != 0;
+
+// 2. 有明确 GNSS 时间（按系统区分）
+    boolean timeDecoded =
+            (state & GnssMeasurement.STATE_TOW_DECODED) != 0
+                    || (state & GnssMeasurement.STATE_GLO_STRING_SYNC) != 0
+                    || (state & GnssMeasurement.STATE_GLO_TOD_DECODED) != 0;
+
+// 3. 载波是否可用
+    boolean carrierUsable =
+            measurement.hasCarrierPhase()
+                    && (measurement.getAccumulatedDeltaRangeState()
+                    & GnssMeasurement.ADR_STATE_VALID) != 0;
+
+// === 最终 FullTracking ===
+    boolean isFullTracking =
+            codeLock
+                    && timeDecoded
+                    && carrierUsable;
+
+    isFullTrackingStr = String.valueOf(isFullTracking);
+
+
+
     String clockStream =
             String.format(
                     "Raw,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s",
-                    SystemClock.elapsedRealtime(),
+                    utcTimeMillisStr,
                     clock.getTimeNanos(),
                     clock.hasLeapSecond() ? clock.getLeapSecond() : "",
                     clock.hasTimeUncertaintyNanos() ? clock.getTimeUncertaintyNanos() : "",
@@ -452,9 +546,11 @@ public class FileLogger implements MeasurementListener {
                     clock.getHardwareClockDiscontinuityCount() + ",");
     mFileWriter.write(clockStream);
 
+    // SV Position, Velocity, Clock, Klobuchar - Not available in GnssMeasurement directly
+    // Placeholder values used to maintain CSV structure as they are not available from GnssMeasurement
     String measurementStream =
             String.format(
-                    "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s",
+                    "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s",
                     measurement.getSvid(),
                     measurement.getTimeOffsetNanos(),
                     measurement.getState(),
@@ -478,7 +574,20 @@ public class FileLogger implements MeasurementListener {
                     Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                             && measurement.hasAutomaticGainControlLevelDb()
                             ? measurement.getAutomaticGainControlLevelDb()
-                            : "");
+                            : "",
+                    basebandCn0DbHz,
+                    fullInterSignalBiasNanos,
+                    fullInterSignalBiasUncertaintyNanos,
+                    satelliteInterSignalBiasNanos,
+                    satelliteInterSignalBiasUncertaintyNanos,
+                    codeType,
+                    chipsetElapsedRealtimeNanos,
+                    isFullTracking,
+                    "", "", "", // SvPositionEcef
+                    "", "", "", // SvVelocityEcef
+                    "", "",     // SvClock
+                    "", "", "", "", "", "", "", "" // Klobuchar
+            );
     mFileWriter.write(measurementStream);
     mFileWriter.newLine();
   }
