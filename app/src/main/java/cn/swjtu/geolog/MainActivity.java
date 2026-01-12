@@ -65,6 +65,7 @@ public class MainActivity extends AppCompatActivity
   private static final int LOCATION_REQUEST_ID = 1;
   private static final String[] REQUIRED_PERMISSIONS = {
           Manifest.permission.ACCESS_FINE_LOCATION,
+          Manifest.permission.ACCESS_COARSE_LOCATION,
           Manifest.permission.ACTIVITY_RECOGNITION
   };
   private static final int NUMBER_OF_FRAGMENTS = 6;
@@ -291,6 +292,15 @@ public class MainActivity extends AppCompatActivity
       }
       if (allGranted) {
         setupFragments();
+        // Check/Request Background Location if on Android 11+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+             if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                     != PackageManager.PERMISSION_GRANTED) {
+                 ActivityCompat.requestPermissions(this,
+                         new String[]{Manifest.permission.ACCESS_BACKGROUND_LOCATION},
+                         LOCATION_REQUEST_ID + 1);
+             }
+        }
       } else {
         if (ActivityCompat.shouldShowRequestPermissionRationale(this, REQUIRED_PERMISSIONS[0])) {
           Log.i(TAG, "Permissions are required to use the app properly.");
@@ -298,6 +308,11 @@ public class MainActivity extends AppCompatActivity
           Log.i(TAG, "User denied permissions and selected 'Don't ask again'.");
         }
       }
+    } else if (requestCode == LOCATION_REQUEST_ID + 1) {
+        // Background location result
+        if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            Toast.makeText(this, "后台定位权限已获取", Toast.LENGTH_SHORT).show();
+        }
     }
   }
 
@@ -398,6 +413,17 @@ public class MainActivity extends AppCompatActivity
   // 请求权限并设置 Fragment
   private void requestPermissionAndSetupFragments(final Activity activity) {
     if (hasPermissions(activity)) {
+      // Check Background Location for Android 10+ (separate check)
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+         if (ContextCompat.checkSelfPermission(activity, Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                 != PackageManager.PERMISSION_GRANTED) {
+             // On Android 11+, we must request this separately.
+             // We request it here to ensure we have it for background logging.
+             ActivityCompat.requestPermissions(activity,
+                     new String[]{Manifest.permission.ACCESS_BACKGROUND_LOCATION},
+                     LOCATION_REQUEST_ID + 1);
+         }
+      }
       setupFragments();
     } else {
       List<String> permissionsToRequest = new ArrayList<>();
@@ -406,6 +432,12 @@ public class MainActivity extends AppCompatActivity
       // Add WRITE_EXTERNAL_STORAGE for older Androids
       if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
           permissionsToRequest.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
+      }
+
+      // On Android 10 (Q) we can request background location with others.
+      // On Android 11+ (R) we CANNOT.
+      if (Build.VERSION.SDK_INT == Build.VERSION_CODES.Q) {
+          permissionsToRequest.add(Manifest.permission.ACCESS_BACKGROUND_LOCATION);
       }
 
       ActivityCompat.requestPermissions(activity, permissionsToRequest.toArray(new String[0]), LOCATION_REQUEST_ID);
