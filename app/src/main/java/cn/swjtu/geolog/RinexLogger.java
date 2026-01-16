@@ -30,7 +30,6 @@ import java.util.Map;
 
 /**
  * A logger that converts GNSS measurements to RINEX 3.05 format.
- * Ported logic from Androidgnsslog_to_rinex.py.
  */
 public class RinexLogger {
 
@@ -48,14 +47,26 @@ public class RinexLogger {
     private static final int MAX_SYS = 10;
     private static final int MAX_FRQ = 5;
 
-    // Measurement States (matching Python script constants)
-    private static final int STATE_CODE_LOCK = 1;
-    private static final int STATE_TOW_KNOWN = 8;
-    private static final int STATE_GLO_STRING_SYNC = 64;
-    private static final int STATE_GLO_TOD_KNOWN = 128;
-    private static final int STATE_GAL_E1C_2ND_CODE_LOCK = 2048;
-    private static final int STATE_GAL_E1BC_CODE_LOCK = 1024;
-    private static final int GPS_ADR_STATE_UNKNOWN = 0;
+    // Measurement States
+    private static final int STATE_CODE_LOCK = 1;       // 2^0
+    private static final int STATE_TOW_DECODED = 8;     // 2^3
+    private static final int STATE_MSEC_AMBIGUOUS = 16; // 2^4
+    private static final int STATE_GLO_STRING_SYNC = 64;// 2^6
+    private static final int STATE_GLO_TOD_DECODED = 128; // 2^7
+    private static final int STATE_GAL_E1C_2ND_CODE_LOCK = 2048; // 2^11
+    private static final int STATE_GAL_E1BC_CODE_LOCK = 1024; // 2^10
+
+    // ADR States
+    private static final int ADR_STATE_VALID = 1;
+    private static final int ADR_STATE_RESET = 2;
+    private static final int ADR_STATE_CYCLE_SLIP = 4;
+    private static final int ADR_STATE_HALF_CYCLE_RESOLVED = 8;
+    private static final int ADR_STATE_HALF_CYCLE_REPORTED = 16;
+
+    // LLI Flags
+    private static final int LLI_SLIP = 0x01;
+    private static final int LLI_HALFC = 0x02;
+    private static final int LLI_BOCTRK = 0x04;
 
     // Thresholds
     private static final double MAXPRRUNCMPS = 10.0;
@@ -69,17 +80,25 @@ public class RinexLogger {
     private boolean mIsLogging = false;
 
     // Accumulated data for Header
-    // Map<SystemId, Map<SignalName, FrequencyIndex>>
     private final Map<Integer, Map<String, Integer>> mObservedSignals = new HashMap<>();
     private final Map<Integer, List<String>> mSignalOrder = new HashMap<>();
     // Signal list per system [freq_index] -> signal_name
     private String[][] mSignals = new String[MAX_SYS][MAX_FRQ];
     private int[] mNumSignals = new int[MAX_SYS];
 
+    // Reference Clock State for Continuity
+    private int mLastHwClockDiscontinuityCount = -1;
+    private long mRefFullBiasNanos = 0;
+    private double mRefBiasNanos = 0.0;
+
     private Date mFirstObsTime = null;
     private long mFirstFullBiasNanos = -1;
     private double mFirstBiasNanos = 0;
     private boolean mFirstObsSet = false;
+
+    // Previous Epoch for Galileo check
+    private List<RnxSat> mPreviousEpochSats = new ArrayList<>();
+    private long mPreviousEpochTimeMillis = -1;
 
     // Position
     private double[] mApproxPos = new double[]{0.0, 0.0, 0.0};
@@ -97,6 +116,7 @@ public class RinexLogger {
         mFirstObsSet = false;
         mFirstObsTime = null;
         mAccumulatedEpochs = 0;
+        mLastHwClockDiscontinuityCount = -1;
     }
 
     private int mAccumulatedEpochs = 0;
@@ -173,12 +193,19 @@ public class RinexLogger {
         if (!mIsLogging || mBodyWriter == null) return;
 
         GnssClock clock = event.getClock();
+
+        // Update Reference Clock if Discontinuity Occurs
+        int discontinuityCount = clock.getHardwareClockDiscontinuityCount();
+        if (mLastHwClockDiscontinuityCount == -1 || discontinuityCount != mLastHwClockDiscontinuityCount) {
+             mLastHwClockDiscontinuityCount = discontinuityCount;
+             mRefFullBiasNanos = clock.getFullBiasNanos();
+             mRefBiasNanos = clock.hasBiasNanos() ? clock.getBiasNanos() : 0.0;
+        }
+
         if (!mFirstObsSet) {
-            mFirstFullBiasNanos = clock.getFullBiasNanos();
-            mFirstBiasNanos = clock.hasBiasNanos() ? clock.getBiasNanos() : 0.0;
             long timeNanos = clock.getTimeNanos(); // internal hardware clock
-            // Calculate UTC time for header
-            mFirstObsTime = calculateUtcTime(timeNanos, mFirstFullBiasNanos, mFirstBiasNanos);
+            // Calculate GPS time for header using the Reference Bias,
+            mFirstObsTime = calculateRinexDate(timeNanos, mRefFullBiasNanos, mRefBiasNanos);
             mFirstObsSet = true;
         }
 
@@ -188,13 +215,21 @@ public class RinexLogger {
 
     private void processEpoch(GnssClock clock, Iterable<GnssMeasurement> measurements) {
         long timeNanos = clock.getTimeNanos();
-        long fullBiasNanos = clock.getFullBiasNanos();
-        double biasNanos = clock.hasBiasNanos() ? clock.getBiasNanos() : 0.0;
 
-        // Calculate epoch time
-        Date epochTime = calculateUtcTime(timeNanos, fullBiasNanos, biasNanos);
+        // Use Reference Bias for Epoch Time
+        Date epochTime = calculateRinexDate(timeNanos, mRefFullBiasNanos, mRefBiasNanos);
+        long currentEpochMillis = epochTime.getTime();
 
         List<RnxSat> epochSats = new ArrayList<>();
+
+        // Check for Galileo 4ms correction if consecutive epoch (approx 1s diff)
+        boolean checkGalileo4ms = false;
+        if (mPreviousEpochTimeMillis != -1) {
+            long diff = Math.abs(currentEpochMillis - mPreviousEpochTimeMillis);
+            if (Math.abs(diff - 1000) < 100) { // Approx 1 second
+                checkGalileo4ms = true;
+            }
+        }
 
         for (GnssMeasurement m : measurements) {
             // 1. Identify System and Signal
@@ -217,19 +252,8 @@ public class RinexLogger {
              if (carrierFreqHz == 0) continue;
             double wavl = CLIGHT / carrierFreqHz;
 
-            // Pseudorange Calculation (Ported from Python)
-            // Python: time_from_gps_start = sat.time_nano - epochs[0].obs.full_bias_nano + int(sat.time_offset_nano)
-            // But here we use current clock.
-            // Wait, Python uses epoch[0] for time reference BUT uses 'sat.time_nano' from the current line.
-            // In Android, all measurements in an event share the clock usually, but let's use the measurement's time offset.
-
-            // Correct approach for Android Raw to Pseudorange:
-            // t_Rx = (TimeNanos - FullBiasNanos - BiasNanos) reported by receiver clock
-            // t_Tx = (ReceivedSvTimeNanos) reported by satellite
-            // P = (t_Rx - t_Tx) * c
-            // Note: Handling week rollovers/day rollovers is critical.
-
-            double prSeconds = calculatePseudorangeSeconds(clock, m, sysId);
+            // Use Reference Bias for Pseudorange Calculation
+            double prSeconds = calculatePseudorangeSeconds(clock, m, sysId, mRefFullBiasNanos, mRefBiasNanos);
             if (prSeconds < 0 || prSeconds > 0.5) continue; // Sanity check 0.5s = 150,000km
 
             double pseudoRange = prSeconds * CLIGHT;
@@ -237,6 +261,12 @@ public class RinexLogger {
             double carrierPhase = accumulatedDeltaRange / wavl;
             double doppler = -m.getPseudorangeRateMetersPerSecond() / wavl;
             double cno = m.getCn0DbHz();
+            int adrState = m.getAccumulatedDeltaRangeState();
+
+            // Equivalent to checking validity. If not valid, phase = 0.
+            if ((adrState & ADR_STATE_VALID) == 0) {
+                carrierPhase = 0.0;
+            }
 
             // 5. Add to Epoch
             RnxSat sat = findOrCreateSat(epochSats, sysId, m.getSvid());
@@ -244,115 +274,158 @@ public class RinexLogger {
             sat.l[freqIndex] = carrierPhase;
             sat.d[freqIndex] = doppler;
             sat.s[freqIndex] = cno;
+
+            // LLI Calculation
+            sat.lli[freqIndex] = 0;
+            if ((adrState & ADR_STATE_HALF_CYCLE_REPORTED) != 0 && (adrState & ADR_STATE_HALF_CYCLE_RESOLVED) == 0) {
+                 sat.lli[freqIndex] |= LLI_HALFC;
+            }
+            if ((adrState & ADR_STATE_CYCLE_SLIP) != 0) {
+                 sat.lli[freqIndex] |= LLI_SLIP;
+            }
+        }
+
+        // Apply Galileo 4ms correction
+        if (checkGalileo4ms && !mPreviousEpochSats.isEmpty()) {
+            double range4ms = 0.004 * CLIGHT; // ~1199km
+            double threshold = 1500.0;
+
+            for (RnxSat sat : epochSats) {
+                if (sat.sys == SYS_GAL) {
+                    // Find corresponding sat in prev epoch
+                    RnxSat prevSat = null;
+                    for (RnxSat p : mPreviousEpochSats) {
+                        if (p.sys == SYS_GAL && p.prn == sat.prn) {
+                            prevSat = p;
+                            break;
+                        }
+                    }
+                    if (prevSat == null) continue;
+
+                    for (int i = 0; i < MAX_FRQ; i++) {
+                         double pCurr = sat.p[i];
+                         double pPrev = prevSat.p[i];
+
+                         if (pCurr != 0 && pPrev != 0) {
+                             if (Math.abs(pCurr - pPrev - range4ms) < threshold || Math.abs(pCurr - pPrev + range4ms) < threshold) {
+                                  int sign = (pCurr - pPrev) < 0 ? -1 : 1;
+                                  sat.p[i] = sat.p[i] - sign * range4ms;
+                             }
+                         }
+                    }
+                }
+            }
         }
 
         if (!epochSats.isEmpty()) {
              try {
                  writeEpoch(epochTime, epochSats);
                  mAccumulatedEpochs++;
+                 mPreviousEpochSats = epochSats; // Store for next comparison
+                 mPreviousEpochTimeMillis = currentEpochMillis;
              } catch (IOException e) {
                  Log.e(TAG, "Error writing epoch", e);
              }
         }
     }
 
-    private double calculatePseudorangeSeconds(GnssClock clock, GnssMeasurement m, int sysId) {
+    private double calculatePseudorangeSeconds(GnssClock clock, GnssMeasurement m, int sysId, long refFullBiasNanos, double refBiasNanos) {
         long timeNanos = clock.getTimeNanos();
-        long fullBiasNanos = clock.getFullBiasNanos();
-        double biasNanos = clock.hasBiasNanos() ? clock.getBiasNanos() : 0.0;
+        // Uses Reference Bias values passed in args
+        double timeOffsetNanos = m.getTimeOffsetNanos();
 
-        // Time of Reception (Rx)
-        // We generally use the "First Full Bias" logic from Python to align everything or use current.
-        // Python: time_from_gps_start = sat.time_nano - epochs[epo_bias].obs.full_bias_nano + int(sat.time_offset_nano)
-        // Here we use current 'clock' as reference.
-        // Rx time in nanoseconds from GPS epoch (roughly)
-        // Android doc: TimeNanos is internal clock. FullBiasNanos is diff to GPS/UTC.
-        // Rx = TimeNanos - FullBiasNanos
-
-        // Let's stick to standard Android Pseudorange computation:
-        // P = (ReceivedSvTimeNanos - TimeNanos) ? No.
-        // tRx_GPS = TimeNanos - (FullBiasNanos + BiasNanos);
-        // tTx_GPS = ReceivedSvTimeNanos;
-        // dt = tRx_GPS - tTx_GPS
-
-        // However, ReceivedSvTimeNanos is modulo week/day.
-
-        double tRxSeconds = (timeNanos - fullBiasNanos - biasNanos) * 1e-9;
-
-        // Adjust tRx to be relative to the start of the "week" or "day" to match RecievedSvTime
-        // This is complex. Let's use the Python logic simplified.
-
-        // Python logic re-derivation:
-        // receive_second = time_from_gps_start - (WeekNumber * WeekSeconds)
-        // It calculates local time of week.
+        // Calculate tRxSeconds in the time system of the constellation (modulo week/day)
 
         long weekNanos = 604800L * 1000000000L;
         long dayNanos = 86400L * 1000000000L;
 
+        // tTx is the ReceivedSvTime from the satellite (already modulo week/day usually)
         double tTxSeconds = m.getReceivedSvTimeNanos() * 1e-9;
+
         double tRxSecondsMod = 0;
 
+        // Calculate Time of Reception (tRx) relative to GPS start, then adjust to Constellation Time
+        // using REFERENCE biases
+        long gpsTimeNanos = timeNanos - refFullBiasNanos + (long)timeOffsetNanos; // Raw GPS time (approx)
+
         if (sysId == SYS_GPS || sysId == SYS_GAL || sysId == SYS_QZS || sysId == SYS_BDS) {
-            long gpsTimeNanos = timeNanos - fullBiasNanos; // Approximate GPS time
             // Modulo week
             long timeOfWeekNanos = gpsTimeNanos % weekNanos;
-            // BDS has 14s offset? Python handles it: - 14 * 10^9.
+
+            // BDS has 14s offset relative to GPS
             if (sysId == SYS_BDS) {
+                 // Note: Java % can return negative if operand is negative, but gpsTimeNanos is huge positive (-fullBias is +)
+                 // BDS time = GPS time - 14s
                  timeOfWeekNanos = (gpsTimeNanos - 14000000000L) % weekNanos;
             }
-            // Adjust for bias
-             tRxSecondsMod = (timeOfWeekNanos - biasNanos) * 1e-9;
+
+            // Adjust for bias (reference bias)
+            tRxSecondsMod = (timeOfWeekNanos - refBiasNanos) * 1e-9;
 
         } else if (sysId == SYS_GLO) {
-            long gloTimeNanos = timeNanos - fullBiasNanos;
-            // Python: DayNonano ...
-            // GLONASS time is modulo day
-            // Add leap second offset? Python: + (3*3600 - LeapSecond)*1e9
-             long timeOfDayNanos = gloTimeNanos % dayNanos;
-             // Python logic for GLO seems to convert to buffer time then subtract day.
-             // Simplified:
-             tRxSecondsMod = (timeOfDayNanos - biasNanos) * 1e-9;
-             // GLO offset to UTC/GPS? GLO is UTC+3.
-             // Let's accept that Android's ReceivedSvTimeNanos for GLONASS is "Time of Day" in GLONASS time.
-             // tRx should be in GLONASS time frame.
-             // FullBiasNanos usually brings us to GPS time.
-             // GPS to GLO: GPS = UTC + 18s (leap) - 19s (wait, GPS-UTC is 18).
-             // GLO = UTC + 3h.
-             // We need to check standard Android implementation for GLO p-range.
-             // For now, use the Python logic structure which seemed to try to align them.
+            // GLONASS: main.cpp calculates receive_second based on DayNonano
+            // receive_second = time_from_gps_start - DayNonano + (3*3600 - LeapSecond)*1e9
+
+            // DayNonano aligns gpsTimeNanos to the start of the "day"
+            long timeOfDayNanos = gpsTimeNanos % dayNanos;
+
+            // Apply GLONASS offset: UTC+3h vs GPS(UTC+Leap) => GLO = GPS - Leap + 3h
+            long gloOffsetNanos = (3 * 3600 - LEAP_SECOND) * 1000000000L;
+
+            tRxSecondsMod = (timeOfDayNanos + gloOffsetNanos - refBiasNanos) * 1e-9;
         }
 
         double pr = tRxSecondsMod - tTxSeconds;
 
         // Rollover check
+        // Check for week rollover in receive_second
         if (pr > 604800 / 2.0 && sysId != SYS_GLO) {
-             pr -= 604800.0;
-        } else if (pr < -604800 / 2.0 && sysId != SYS_GLO) {
-             pr += 604800.0;
+             double delS = Math.round(pr / 604800.0) * 604800.0;
+             pr -= delS;
+        } else if (pr < -604800 / 2.0 && sysId != SYS_GLO) { // Handle negative just in case
+             double delS = Math.round(pr / 604800.0) * 604800.0;
+             pr -= delS;
         }
 
-         if (sysId == SYS_GLO) {
-             if (pr > 86400 / 2.0) pr -= 86400.0;
+        // additional modulo checks
+        if ((sysId == SYS_GPS || sysId == SYS_GAL || sysId == SYS_BDS || sysId == SYS_QZS) && pr > 604800) {
+             pr %= 604800.0;
+        }
+        if (sysId == SYS_GLO) {
+             if (pr > 86400 / 2.0) pr -= 86400.0; // Standard rollover check for GLO (which is day based sometimes)
              else if (pr < -86400 / 2.0) pr += 86400.0;
-         }
+
+             if (pr > 86400) pr %= 86400.0;
+        }
 
         return pr;
     }
 
     private boolean isMeasurementValid(GnssMeasurement m, int sysId) {
         int state = m.getState();
-        // Check availability
-        boolean available = false;
-        if (sysId == SYS_GPS || sysId == SYS_BDS || sysId == SYS_QZS) {
-            available = (state & STATE_CODE_LOCK) != 0; // Simplified. Python had (code_lock & tow_known)
-            // Python relaxed L5 to just Code Lock.
-        } else if (sysId == SYS_GLO) {
-            available = (state & STATE_GLO_STRING_SYNC) != 0; // Simplified
-        } else if (sysId == SYS_GAL) {
-            available = (state & STATE_GAL_E1C_2ND_CODE_LOCK) != 0 || (state & STATE_GAL_E1BC_CODE_LOCK) != 0;
-        }
 
-        if (!available) return false;
+        // 0. Millisecond Ambiguity Check: Must be 0 for valid pseudorange
+        if ((state & STATE_MSEC_AMBIGUOUS) != 0) return false;
+
+        // 1. All systems must satisfy STATE_TOW_DECODED (or equivalent for GLO)
+        boolean towDecoded = false;
+        if (sysId == SYS_GLO) {
+            towDecoded = (state & STATE_GLO_TOD_DECODED) != 0;
+        } else {
+            towDecoded = (state & STATE_TOW_DECODED) != 0;
+        }
+        if (!towDecoded) return false;
+
+        boolean codeLock = false;
+        if (sysId == SYS_GAL) {
+            codeLock = (state & STATE_GAL_E1BC_CODE_LOCK) != 0 || (state & STATE_GAL_E1C_2ND_CODE_LOCK) != 0;
+            if (!codeLock) return false;
+        }
+        else if (sysId == SYS_GPS || sysId == SYS_BDS || sysId == SYS_QZS) {
+            if ((state & STATE_CODE_LOCK) == 0) return false;
+        } else if (sysId == SYS_GLO) {
+            if ((state & STATE_GLO_STRING_SYNC) == 0) return false;
+        }
 
         // Uncertainty checks
         if (m.getPseudorangeRateUncertaintyMetersPerSecond() > MAXPRRUNCMPS) return false;
@@ -361,6 +434,7 @@ public class RinexLogger {
 
         return true;
     }
+
 
     private String identifySignal(int sysId, double freqHz) {
         // Frequency Matching with tolerance
@@ -371,13 +445,7 @@ public class RinexLogger {
         } else if (sysId == SYS_GLO) {
              if (isApprox(freq, 1602000000, 10000000)) return "L1C"; // GLO FDMA needs wider tolerance or channel calc
         } else if (sysId == SYS_BDS) {
-            if (isApprox(freq, 1561098000)) return "B2I"; // B1I in old convention, Python calls it B2I? Check Python script.
-            // Python: "B2I" for 1561.098. Standard is B1I. Python output string says C2I/C1I?
-            // Python script: signals[i]... "C2I"...
-            // Let's match Python string names "B2I", "B1P", "B5P" to RINEX codes "2I", "1P", "5P"
-            // Python: add_signal(SYS_BDS, "B2I") -> Header: "C2I L2I D2I S2I" - Wait.
-            // Python `signal_line` logic: `signals[i][0][1:]` -> takes "2I" from "B2I".
-            // So if I return "B2I", header writes "C2I".
+            if (isApprox(freq, 1561098000)) return "B2I"; // B1I (RINEX code 2I)
             if (isApprox(freq, 1575420000)) return "B1P"; // B1C
             if (isApprox(freq, 1176450000)) return "B5P"; // B2a
         } else if (sysId == SYS_GAL) {
@@ -439,21 +507,8 @@ public class RinexLogger {
         });
 
         SimpleDateFormat sdf = new SimpleDateFormat("yy MM dd HH mm ss", Locale.US);
-         // Python: > 2021 01 01 00 00 00.0000000  0 10
-         // Python `print_rnx_epoch`: > yyyy mm dd ...
-         // Wait, Python uses `> {:04d}` (4 digit year).
-         // RINEX 3.05 usually uses 4 digit year.
-        SimpleDateFormat sdfFirst = new SimpleDateFormat("yyyy MM dd HH mm ss", Locale.US);
-        String timeStr = sdfFirst.format(time); // e.g. 2022 12 11 ...
-        double seconds = Double.parseDouble(timeStr.substring(17)) + (time.getTime() % 1000) / 1000.0;
 
-        // Re-format strictly
-        SimpleDateFormat ymdhms = new SimpleDateFormat("yyyy MM dd HH mm ss", Locale.US);
-        String baseTime = ymdhms.format(time);
-        String secPart = String.format(Locale.US, "%10.7f", (double) time.getSeconds() + (time.getTime()%1000)/1000.0);
-        // Date.getSeconds() is deprecated.
-        // Let's use Calendar or just replace substring?
-        // Simpler:
+        // Use Calendar for precise time handling
         java.util.Calendar cal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"));
         cal.setTime(time);
 
@@ -486,14 +541,12 @@ public class RinexLogger {
             int sysIdx = getSystemIndex(sat.sys);
             if (sysIdx != -1) {
                 for (int i = 0; i < mNumSignals[sysIdx]; i++) { // Loop through registered signals
-                    // We need to match the signal index.
-                    // The 'sat' object stores data in arrays ordered by 'frequency index'.
-                    // But 'sat' was populated using 'registerSignal', which returns the index in mSignals.
-                    // So sat.p[i] corresponds to mSignals[sysIdx][i].
-                    // So we just iterate 0 to mNumSignals.
 
                     mBodyWriter.write(formatObs(sat.p[i])); // C/Pseudo
-                    mBodyWriter.write(formatObs(sat.l[i])); // L/Phase
+                    // Carrier Phase includes LLI
+                    int lli = sat.lli[i] & (LLI_SLIP | LLI_HALFC | LLI_BOCTRK);
+                    mBodyWriter.write(formatPhase(sat.l[i], lli)); // L/Phase
+
                     mBodyWriter.write(formatObs(sat.d[i])); // D/Doppler
                     mBodyWriter.write(formatObs(sat.s[i])); // S/SNR
                 }
@@ -505,6 +558,14 @@ public class RinexLogger {
     private String formatObs(double val) {
         if (Math.abs(val) < NEAR_ZERO) return "                ";
         return String.format(Locale.US, "%14.3f  ", val);
+    }
+
+    private String formatPhase(double val, int lli) {
+        if (Math.abs(val) < NEAR_ZERO) return "              ";
+        if (Math.abs(val) < NEAR_ZERO) {
+            return "              "; // 14 spaces to align
+        }
+        return String.format(Locale.US, "%13.3f%1d", val, lli);
     }
 
     private void writeHeader(BufferedWriter writer) throws IOException {
@@ -543,8 +604,6 @@ public class RinexLogger {
 
                  for (int i = 0; i < mNumSignals[idx]; i++) {
                      String sig = mSignals[idx][i];
-                     // Python: C{sig[1:]} L...
-                     // sig is like "L1C"
                      String suf = sig.substring(1); // "1C"
                      sb.append(" C").append(suf).append(" L").append(suf).append(" D").append(suf).append(" S").append(suf);
                  }
@@ -610,32 +669,16 @@ public class RinexLogger {
         return 5;
     }
 
-    private Date calculateUtcTime(long timeNanos, long fullBiasNanos, double biasNanos) {
+    private Date calculateRinexDate(long timeNanos, long fullBiasNanos, double biasNanos) {
         // GPS Time = TimeNanos - (FullBiasNanos + BiasNanos)
-        // UTC Time = GPS Time - LeapSeconds (18s)
+        // RINEX logs typically use GPS Time. By not subtracting leap seconds,
+        // the Date object (printed as UTC) will visually represent GPS time.
         long gpsTimeNanos = timeNanos - fullBiasNanos - (long)biasNanos;
         // Convert to millis
         long gpsTimeMillis = gpsTimeNanos / 1000000L;
-        // Adjust for GPS epoch (Jan 6, 1980) vs Java Epoch (Jan 1, 1970)
-        // BUT, fullBiasNanos is "nanoseconds since 1980... inside the receiver hardware logic?"
-        // Android docs: FullBiasNanos is "difference between hardware clock and GPS time" (usually negative).
-        // TimeNanos + FullBiasNanos = GPS Time (nanos since Jan 6 1980).
-        // Java time is since Jan 1 1970.
-        // Difference is 10 years + leap days.
-        // 315964800000 ms.
-
-        // Actually, let's use the Python logic:
-        /*
-        delta_time_nano = time_nano - full_bias_nano
-        delta_time_sec = delta_time_nano // 1e9
-        days = delta_time_sec // 86400 + 6
-        years = 1980
-        ...
-        */
-        // Simpler way:
         long gpsEpochMillis = 315964800000L; // Jan 6 1980 in Java time
-        long utcTimeMillis = gpsEpochMillis + gpsTimeMillis - (LEAP_SECOND * 1000);
-        return new Date(utcTimeMillis);
+        long rinexTimeMillis = gpsEpochMillis + gpsTimeMillis;
+        return new Date(rinexTimeMillis);
     }
 
     private double[] latLonHToXyz(double lat, double lon, double alt) {
@@ -659,6 +702,7 @@ public class RinexLogger {
         double[] l = new double[MAX_FRQ];
         double[] d = new double[MAX_FRQ];
         double[] s = new double[MAX_FRQ];
+        int[] lli = new int[MAX_FRQ];
 
         RnxSat(int sys, int prn) {
             this.sys = sys;
