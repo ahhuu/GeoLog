@@ -58,6 +58,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import android.view.Menu;
+import android.view.MenuItem;
 
 /** The activity for the application. */
 public class MainActivity extends AppCompatActivity
@@ -69,8 +71,8 @@ public class MainActivity extends AppCompatActivity
           Manifest.permission.ACTIVITY_RECOGNITION
   };
   private static final int NUMBER_OF_FRAGMENTS = 6;
-  private static final int FRAGMENT_INDEX_SETTING = 0;
-  private static final int FRAGMENT_INDEX_LOGGER = 1;
+  private static final int FRAGMENT_INDEX_STATUS = 0;
+  private static final int FRAGMENT_INDEX_MEASUREMENT = 1;
   private static final int FRAGMENT_INDEX_RESULT = 2;
   private static final int FRAGMENT_INDEX_MAP = 3;
   private static final int FRAGMENT_INDEX_AGNSS = 4;
@@ -78,9 +80,23 @@ public class MainActivity extends AppCompatActivity
   private static final String TAG = "MainActivity";
 
   private MeasurementProvider mMeasurementProvider;
+  public MeasurementProvider getMeasurementProvider() {
+      return mMeasurementProvider;
+  }
+
   private UiLogger mUiLogger;
   private RealTimePositionVelocityCalculator mRealTimePositionVelocityCalculator;
+
+  public RealTimePositionVelocityCalculator getRealTimePositionVelocityCalculator() {
+      return mRealTimePositionVelocityCalculator;
+  }
+
   private FileLogger mFileLogger;
+
+  public FileLogger getFileLogger() {
+      return mFileLogger;
+  }
+
   private AgnssUiLogger mAgnssUiLogger;
   private Fragment[] mFragments;
   private GoogleApiClient mGoogleApiClient;
@@ -158,6 +174,36 @@ public class MainActivity extends AppCompatActivity
     setContentView(R.layout.activity_main);
     buildGoogleApiClient();
     requestPermissionAndSetupFragments(this);
+
+    // Setup Toolbar support/styling if needed, usually inherent in Theme.AppCompat
+  }
+
+  @Override
+  public boolean onCreateOptionsMenu(Menu menu) {
+      getMenuInflater().inflate(R.menu.main_menu, menu);
+      return true;
+  }
+
+  @Override
+  public boolean onOptionsItemSelected(MenuItem item) {
+      int id = item.getItemId();
+      if (id == R.id.action_settings) {
+          FragmentManager fm = getSupportFragmentManager();
+          Fragment f = fm.findFragmentById(R.id.settings_container);
+
+          if (f != null) {
+              fm.popBackStack();
+          } else {
+              if (mSettingsFragment != null) {
+                  fm.beginTransaction()
+                      .replace(R.id.settings_container, mSettingsFragment)
+                      .addToBackStack("settings")
+                      .commit();
+              }
+          }
+          return true;
+      }
+      return super.onOptionsItemSelected(item);
   }
 
   protected PendingIntent createActivityDetectionPendingIntent() {
@@ -260,18 +306,18 @@ public class MainActivity extends AppCompatActivity
     public CharSequence getPageTitle(int position) {
       Locale locale = Locale.getDefault();
       switch (position) {
-        case FRAGMENT_INDEX_SETTING:
-          return getString(R.string.title_settings).toUpperCase(locale);
-        case FRAGMENT_INDEX_LOGGER:
-          return getString(R.string.title_log).toUpperCase(locale);
+        case FRAGMENT_INDEX_STATUS:
+          return getString(R.string.title_status);
+        case FRAGMENT_INDEX_MEASUREMENT:
+          return getString(R.string.title_measurements);
         case FRAGMENT_INDEX_RESULT:
-          return getString(R.string.title_offset).toUpperCase(locale);
+          return getString(R.string.title_offset);
         case FRAGMENT_INDEX_MAP:
-          return getString(R.string.title_map).toUpperCase(locale);
+          return getString(R.string.title_map);
         case FRAGMENT_INDEX_AGNSS:
-          return getString(R.string.title_agnss).toUpperCase(locale);
+          return getString(R.string.title_agnss);
         case FRAGMENT_INDEX_PLOT:
-          return getString(R.string.title_plot).toLowerCase(locale);
+          return getString(R.string.title_plot);
         default:
           return super.getPageTitle(position);
       }
@@ -335,18 +381,21 @@ public class MainActivity extends AppCompatActivity
                     mAgnssUiLogger);
     mFragments = new Fragment[NUMBER_OF_FRAGMENTS];
 
-    SettingsFragment settingsFragment = new SettingsFragment();
-    settingsFragment.setGpsContainer(mMeasurementProvider);
-    settingsFragment.setRealTimePositionVelocityCalculator(mRealTimePositionVelocityCalculator);
-    settingsFragment.setAutoModeSwitcher(this);
-    settingsFragment.setFileLogger(mFileLogger); // 设置 FileLogger 到 SettingsFragment
-    mFragments[FRAGMENT_INDEX_SETTING] = settingsFragment;
+    mSettingsFragment = new SettingsFragment();
+    mSettingsFragment.setGpsContainer(mMeasurementProvider);
+    mSettingsFragment.setRealTimePositionVelocityCalculator(mRealTimePositionVelocityCalculator);
+    mSettingsFragment.setAutoModeSwitcher(this);
+    mSettingsFragment.setFileLogger(mFileLogger); // 设置 FileLogger 到 SettingsFragment
+    // mFragments[FRAGMENT_INDEX_SETTING] = settingsFragment; // Removed from tabs
+
+    StatusFragment statusFragment = new StatusFragment();
+    mFragments[FRAGMENT_INDEX_STATUS] = statusFragment;
 
     LoggerFragment loggerFragment = new LoggerFragment();
     loggerFragment.setUILogger(mUiLogger);
     loggerFragment.setFileLogger(mFileLogger);
     mUIFragmentComponent = loggerFragment.getUIFragmentComponent(); // 获取 UIFragmentComponent 实例
-    mFragments[FRAGMENT_INDEX_LOGGER] = loggerFragment;
+    mFragments[FRAGMENT_INDEX_MEASUREMENT] = loggerFragment;
 
     ResultFragment resultFragment = new ResultFragment();
     resultFragment.setPositionVelocityCalculator(mRealTimePositionVelocityCalculator);

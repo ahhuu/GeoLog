@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/white"
+    android:padding="16dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <!-- Section 1: Quality -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@android:color/white"
+            android:elevation="4dp"
+            android:padding="8dp"
+            android:layout_marginBottom="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Quality Indicator"
+                android:textColor="@android:color/black"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="8dp"/>
+
+            <LinearLayout
+                android:id="@+id/container_quality_indicators"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"/>
+        </LinearLayout>
+
+        <!-- Section 2: Avg C/N0 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@android:color/white"
+            android:elevation="4dp"
+            android:padding="8dp"
+            android:layout_marginBottom="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Average C/N0"
+                android:textColor="@android:color/black"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="8dp"/>
+
+            <LinearLayout
+                android:id="@+id/container_avg_cn0"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"/>
+        </LinearLayout>
+
+        <!-- Section 3: System Status -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@android:color/white"
+            android:elevation="4dp"
+            android:padding="8dp"
+            android:layout_marginBottom="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Satellite System Status"
+                android:textColor="@android:color/black"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="8dp"/>
+
+            <TableLayout
+                android:id="@+id/table_sys_status"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:stretchColumns="0">
+
+                <TableRow>
+                    <TextView android:text="System/Band" android:textColor="@android:color/black" android:textStyle="bold"/>
+                    <TextView android:text="Tot" android:textColor="@android:color/black" android:paddingStart="8dp" android:textStyle="bold"/>
+                    <TextView android:text="Use" android:textColor="@android:color/holo_green_dark" android:paddingStart="8dp" android:textStyle="bold"/>
+                    <TextView android:text="Unu" android:textColor="@android:color/holo_red_dark" android:paddingStart="8dp" android:textStyle="bold"/>
+                </TableRow>
+            </TableLayout>
+        </LinearLayout>
+
+        <!-- Section 4: Device Info -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@android:color/white"
+            android:elevation="4dp"
+            android:padding="8dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Device Information"
+                android:textColor="@android:color/black"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="8dp"/>
+
+            <TextView android:id="@+id/text_time_date" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="@android:color/black"/>
+            <TextView android:id="@+id/text_hardware" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="@android:color/black"/>
+            <TextView android:id="@+id/text_hw_year" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="@android:color/black"/>
+            <TextView android:id="@+id/text_platform_info" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="@android:color/black"/>
+
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>
+

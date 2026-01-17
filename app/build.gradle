@@ -10,8 +10,8 @@ android {
         applicationId "cn.swjtu.geolog"
         minSdk 24
         targetSdk 33
-        versionCode 3
-        versionName "2.1"
+        versionCode 4
+        versionName "3.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -42,6 +42,7 @@ android {
 dependencies {
 
     implementation 'androidx.appcompat:appcompat:1.4.2'
+    implementation 'androidx.recyclerview:recyclerview:1.2.1'
     implementation 'com.google.android.gms:play-services-base:18.2.0'
     implementation 'com.google.android.gms:play-services-location:21.0.1'
     implementation 'com.google.android.gms:play-services-maps:18.1.0'

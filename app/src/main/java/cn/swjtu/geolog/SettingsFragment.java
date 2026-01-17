@@ -76,6 +76,26 @@ public class SettingsFragment extends Fragment {
   /** {@link GroundTruthModeSwitcher} to receive update from AR result broadcast */
   private GroundTruthModeSwitcher mModeSwitcher;
 
+  @Override
+  public void onAttach(Context context) {
+    super.onAttach(context);
+    if (context instanceof MainActivity) {
+      MainActivity activity = (MainActivity) context;
+      if (mGpsContainer == null) {
+        mGpsContainer = activity.getMeasurementProvider();
+      }
+      if (mRealTimePositionVelocityCalculator == null) {
+        mRealTimePositionVelocityCalculator = activity.getRealTimePositionVelocityCalculator();
+      }
+      if (mFileLogger == null) {
+        mFileLogger = activity.getFileLogger();
+      }
+      if (mModeSwitcher == null) {
+        mModeSwitcher = activity;
+      }
+    }
+  }
+
   public void setGpsContainer(MeasurementProvider value) {
     mGpsContainer = value;
   }
@@ -98,6 +118,10 @@ public class SettingsFragment extends Fragment {
       LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
     final View view = inflater.inflate(R.layout.fragment_main, container, false /* attachToRoot */);
 
+    if (mGpsContainer == null && getActivity() instanceof MainActivity) {
+        mGpsContainer = ((MainActivity) getActivity()).getMeasurementProvider();
+    }
+
     final Switch registerLocation = (Switch) view.findViewById(R.id.register_location);
     final TextView registerLocationLabel =
         (TextView) view.findViewById(R.id.register_location_label);
@@ -109,6 +133,15 @@ public class SettingsFragment extends Fragment {
 
           @Override
           public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+            if (mGpsContainer == null) {
+                if (getActivity() instanceof MainActivity) {
+                   mGpsContainer = ((MainActivity) getActivity()).getMeasurementProvider();
+                }
+                if (mGpsContainer == null) {
+                    Toast.makeText(getContext(), "GPS Container not initialized", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+            }
 
             if (isChecked) {
               mGpsContainer.registerLocation();
@@ -133,6 +166,12 @@ public class SettingsFragment extends Fragment {
 
           @Override
           public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+            if (mGpsContainer == null) {
+                 if (getActivity() instanceof MainActivity) {
+                   mGpsContainer = ((MainActivity) getActivity()).getMeasurementProvider();
+                }
+                if (mGpsContainer == null) return;
+            }
 
             if (isChecked) {
               mGpsContainer.registerMeasurements();
@@ -155,6 +194,12 @@ public class SettingsFragment extends Fragment {
 
           @Override
           public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+             if (mGpsContainer == null) {
+                 if (getActivity() instanceof MainActivity) {
+                   mGpsContainer = ((MainActivity) getActivity()).getMeasurementProvider();
+                 }
+                 if (mGpsContainer == null) return;
+             }
 
             if (isChecked) {
               mGpsContainer.registerNavigation();
@@ -177,6 +222,12 @@ public class SettingsFragment extends Fragment {
 
           @Override
           public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+             if (mGpsContainer == null) {
+                 if (getActivity() instanceof MainActivity) {
+                   mGpsContainer = ((MainActivity) getActivity()).getMeasurementProvider();
+                 }
+                 if (mGpsContainer == null) return;
+             }
 
             if (isChecked) {
               mGpsContainer.registerGnssStatus();
@@ -198,6 +249,12 @@ public class SettingsFragment extends Fragment {
 
           @Override
           public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+             if (mGpsContainer == null) {
+                 if (getActivity() instanceof MainActivity) {
+                   mGpsContainer = ((MainActivity) getActivity()).getMeasurementProvider();
+                 }
+                 if (mGpsContainer == null) return;
+             }
 
             if (isChecked) {
               mGpsContainer.registerNmea();
@@ -379,34 +436,27 @@ public class SettingsFragment extends Fragment {
           }
         });
 
-    TextView swInfo = (TextView) view.findViewById(R.id.sw_info);
-
-    java.lang.reflect.Method method;
-    LocationManager locationManager = mGpsContainer.getLocationManager();
-    try {
-      method = locationManager.getClass().getMethod("getGnssYearOfHardware");
-      int hwYear = (int) method.invoke(locationManager);
-      if (hwYear == 0) {
-        swInfo.append("HW Year: " + "2015 or older \n");
-      } else {
-        swInfo.append("HW Year: " + hwYear + "\n");
+    final Switch keepScreenOn = (Switch) view.findViewById(R.id.keep_screen_on);
+    keepScreenOn.setOnCheckedChangeListener(new OnCheckedChangeListener() {
+      @Override
+      public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+        if (isChecked) {
+          getActivity().getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        } else {
+          getActivity().getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        }
       }
+    });
 
-    } catch (NoSuchMethodException e) {
-      logException("No such method exception: ", e);
-      return null;
-    } catch (IllegalAccessException e) {
-      logException("Illegal Access exception: ", e);
-      return null;
-    } catch (InvocationTargetException e) {
-      logException("Invocation Target Exception: ", e);
-      return null;
+    TextView appVersion = view.findViewById(R.id.app_version_text);
+    if (appVersion != null) {
+      try {
+        String v = getActivity().getPackageManager().getPackageInfo(getActivity().getPackageName(), 0).versionName;
+        appVersion.setText("App Version: " + v);
+      } catch (Exception e) {
+        appVersion.setText("App Version: Unknown");
+      }
     }
-
-    String platformVersionString = Build.VERSION.RELEASE;
-    swInfo.append("Platform: " + platformVersionString + "\n");
-    int apiLevelInt = Build.VERSION.SDK_INT;
-    swInfo.append("Api Level: " + apiLevelInt);
 
     return view;
   }

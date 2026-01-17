@@ -11,9 +11,9 @@
       "type": "SINGLE",
       "filters": [],
       "attributes": [],
-      "versionCode": 3,
-      "versionName": "2.1",
-      "outputFile": "GeoLog_release_v2.1.apk"
+      "versionCode": 4,
+      "versionName": "3.0",
+      "outputFile": "GeoLog_release_v3.0.apk"
     }
   ],
   "elementType": "File"

@@ -62,7 +62,7 @@ public class HelpDialog extends Dialog {
           }
         });
 
-    String helpText = readRawTextFile(R.raw.help_contents);
+    String helpText = readRawTextFile(R.raw.help_text);
     help.loadData(helpText, "text/html; charset=utf-8", "utf-8");
   }
 

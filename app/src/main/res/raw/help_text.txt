@@ -1,0 +1,39 @@
+<h2>GeoLog Application Help</h2>
+<p>GeoLog is a professional GNSS data logging application that allows you to record and analyze raw GNSS measurements.</p>
+
+<h3>Supported Devices</h3>
+<p>This application supports devices running Android N (API 24) or later with GNSS Hardware capability. Recording raw measurements requires device hardware support for raw GNSS output (GPS, GLONASS, Galileo, Beidou, QZSS).</p>
+
+<h3>Features</h3>
+<ul>
+    <li>Real-time GNSS status (Status view)</li>
+    <li>Raw measurements logging (Measurements view)</li>
+    <li>Position offsets monitoring (Offset view)</li>
+    <li>Sky map of satellites (Map view)</li>
+    <li>AGNSS data support (AGNSS view)</li>
+    <li>C/N0 plots (Plot view)</li>
+</ul>
+
+<h3>How to use</h3>
+<p><b>Measurements Tab:</b></p>
+<ul>
+    <li><b>Start:</b> Scroll to the top of the log list.</li>
+    <li><b>Clear:</b> Clear the current log display (does not delete file).</li>
+    <li><b>End:</b> Scroll to the bottom of the log list.</li>
+    <li><b>Start Log:</b> Begin recording GNSS data to a file.</li>
+    <li><b>Stop & Send:</b> Stop recording and share the log file.</li>
+    <li><b>Timer:</b> Set a timer for logging duration.</li>
+</ul>
+
+<p><b>Settings:</b></p>
+<ul>
+    <li>Toggle switches to enable/disable logging of specific data types (Location, Measurements, Navigation, Status, NMEA, RINEX).</li>
+    <li><b>RINEX:</b> Enable to log data in RINEX format.</li>
+    <li><b>Residual Plot:</b> Configure ground truth for residual analysis.</li>
+</ul>
+
+<p><b>Status Tab:</b></p>
+<ul>
+    <li>View detailed signal strength (C/N0), cycle slips, and multipath indicators.</li>
+</ul>
+
