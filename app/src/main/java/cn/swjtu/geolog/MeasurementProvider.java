@@ -28,8 +28,10 @@ import android.os.SystemClock;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationServices;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -147,18 +149,26 @@ public class MeasurementProvider {
         @Override
         public void onGnssMeasurementsReceived(GnssMeasurementsEvent event) {
           if (mLogMeasurements) {
-            for (MeasurementListener logger : mListeners) {
-              logger.onGnssMeasurementsReceived(event);
-            }
+              try {
+                for (MeasurementListener logger : mListeners) {
+                  logger.onGnssMeasurementsReceived(event);
+                }
+              } catch (Exception e) {
+                  android.util.Log.e(TAG, "Error sending GnssMeasurementsEvent to listeners", e);
+              }
           }
         }
 
         @Override
         public void onStatusChanged(int status) {
           if (mLogMeasurements) {
-            for (MeasurementListener logger : mListeners) {
-              logger.onGnssMeasurementsStatusChanged(status);
-            }
+              try {
+                for (MeasurementListener logger : mListeners) {
+                  logger.onGnssMeasurementsStatusChanged(status);
+                }
+              } catch (Exception e) {
+                  android.util.Log.e(TAG, "Error sending GnssMeasurementsStatus to listeners", e);
+              }
           }
         }
       };
@@ -168,18 +178,26 @@ public class MeasurementProvider {
         @Override
         public void onGnssNavigationMessageReceived(GnssNavigationMessage event) {
           if (mLogNavigationMessages) {
-            for (MeasurementListener logger : mListeners) {
-              logger.onGnssNavigationMessageReceived(event);
-            }
+              try {
+                for (MeasurementListener logger : mListeners) {
+                  logger.onGnssNavigationMessageReceived(event);
+                }
+              } catch (Exception e) {
+                  android.util.Log.e(TAG, "Error sending GnssNavigationMessage to listeners", e);
+              }
           }
         }
 
         @Override
         public void onStatusChanged(int status) {
           if (mLogNavigationMessages) {
-            for (MeasurementListener logger : mListeners) {
-              logger.onGnssNavigationMessageStatusChanged(status);
-            }
+              try {
+                for (MeasurementListener logger : mListeners) {
+                  logger.onGnssNavigationMessageStatusChanged(status);
+                }
+              } catch (Exception e) {
+                  android.util.Log.e(TAG, "Error sending GnssNavigationMessageStatus to listeners", e);
+              }
           }
         }
       };
@@ -217,9 +235,21 @@ public class MeasurementProvider {
 
   public MeasurementProvider(
       Context context, GoogleApiClient client, MeasurementListener... loggers) {
-    this.mListeners = Arrays.asList(loggers);
+    this.mListeners = new CopyOnWriteArrayList<>(Arrays.asList(loggers));
     mLocationManager = (LocationManager) context.getSystemService(Context.LOCATION_SERVICE);
     this.mGoogleApiClient = client;
+  }
+
+  public void addListener(MeasurementListener listener) {
+    if (listener != null && !mListeners.contains(listener)) {
+      mListeners.add(listener);
+    }
+  }
+
+  public void removeListener(MeasurementListener listener) {
+    if (listener != null) {
+      mListeners.remove(listener);
+    }
   }
 
   public LocationManager getLocationManager() {
@@ -376,6 +406,8 @@ public class MeasurementProvider {
       //                                          int[] grantResults)
       // to handle the case where the user grants the permission. See the documentation
       // for ActivityCompat#requestPermissions for more details.
+    } catch (Exception e) {
+      logRegistration("GnssMeasurements", false);
     }
   }
 
@@ -384,9 +416,13 @@ public class MeasurementProvider {
   }
 
   public void registerNavigation() {
-    logRegistration(
-        "GpsNavigationMessage",
-        mLocationManager.registerGnssNavigationMessageCallback(gnssNavigationMessageListener));
+    try {
+      logRegistration(
+              "GpsNavigationMessage",
+              mLocationManager.registerGnssNavigationMessageCallback(gnssNavigationMessageListener));
+    } catch (Exception e) {
+      logRegistration("GpsNavigationMessage", false);
+    }
   }
 
   public void unregisterNavigation() {
@@ -405,6 +441,8 @@ public class MeasurementProvider {
       //                                          int[] grantResults)
       // to handle the case where the user grants the permission. See the documentation
       // for ActivityCompat#requestPermissions for more details.
+    } catch (Exception e) {
+      logRegistration("GnssStatus", false);
     }
   }
 
@@ -423,6 +461,8 @@ public class MeasurementProvider {
       //                                          int[] grantResults)
       // to handle the case where the user grants the permission. See the documentation
       // for ActivityCompat#requestPermissions for more details.
+    } catch (Exception e) {
+      logRegistration("Nmea", false);
     }
   }
 

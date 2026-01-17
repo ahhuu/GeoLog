@@ -29,6 +29,7 @@
     </queries>
 
     <application
+        android:name="cn.swjtu.geolog.GeoLogApp"
         android:requestLegacyExternalStorage="true"
         android:allowBackup="true"
         android:icon="@mipmap/geolog2_round"
