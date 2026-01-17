@@ -35,6 +35,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -55,6 +56,10 @@ public class StatusFragment extends Fragment implements MeasurementListener {
     private final long uiThrottleMs = 500; // throttle UI updates
     private long lastUiUpdate = 0;
     private FieldLogger fieldLogger;
+    private static final String[] QUALITY_BAND_ORDER = {
+        "L1/E1/B1C", "L2", "L5/E5a/B2a", "E5b/B2b", "E5", "E6/L6", "B1I", "B3I",
+        "G1", "G2", "G3"
+    };
 
     @Nullable
     @Override
@@ -197,7 +202,7 @@ public class StatusFragment extends Fragment implements MeasurementListener {
             }
         }
 
-        List<String> qualityKeys = new ArrayList<>(qualityMap.keySet());
+        List<String> qualityKeys = sortQualityKeys(qualityMap.keySet());
         Collections.sort(qualityKeys);
 
         // Update Quality Indicators
@@ -224,18 +229,30 @@ public class StatusFragment extends Fragment implements MeasurementListener {
     }
 
     private String getFrequencyGroupLabel(double freqMhz) {
-        if (Math.abs(freqMhz - 1575.42) < 5.0) return "L1, E1, B1C";
+        if (Math.abs(freqMhz - 1575.42) < 5.0) return "L1/E1/B1C";
         if (Math.abs(freqMhz - 1227.60) < 5.0) return "L2";
-        if (Math.abs(freqMhz - 1176.45) < 5.0) return "L5, E5a, B2a";
+        if (Math.abs(freqMhz - 1176.45) < 5.0) return "L5/E5a/B2a";
+        if (Math.abs(freqMhz - 1207.14) < 5.0) return "E5b/B2b";
+        if (Math.abs(freqMhz - 1191.795) < 5.0) return "E5";
+        if (Math.abs(freqMhz - 1278.75) < 5.0) return "E6/L6";
+        if (Math.abs(freqMhz - 1561.098) < 5.0) return "B1I";
+        if (Math.abs(freqMhz - 1268.52) < 5.0) return "B3I";
         if (Math.abs(freqMhz - 1602.0) < 25.0) return "G1";
         if (Math.abs(freqMhz - 1246.0) < 25.0) return "G2";
         if (Math.abs(freqMhz - 1202.0) < 5.0) return "G3";
-        if (Math.abs(freqMhz - 1207.14) < 5.0) return "E5b, B2b";
-        if (Math.abs(freqMhz - 1191.795) < 5.0) return "E5";
-        if (Math.abs(freqMhz - 1278.75) < 5.0) return "E6, L6";
-        if (Math.abs(freqMhz - 1561.098) < 5.0) return "B1I";
-        if (Math.abs(freqMhz - 1268.52) < 5.0) return "B3I";
         return String.format(Locale.US, "%.1fMHz", freqMhz);
+    }
+
+    private List<String> sortQualityKeys(java.util.Set<String> keys) {
+        List<String> ordered = new ArrayList<>();
+        java.util.Set<String> remaining = new LinkedHashSet<>(keys);
+        for (String k : QUALITY_BAND_ORDER) {
+            if (remaining.remove(k)) ordered.add(k);
+        }
+        List<String> tail = new ArrayList<>(remaining);
+        Collections.sort(tail);
+        ordered.addAll(tail);
+        return ordered;
     }
 
     private void updateQualityContainer(Map<String, QualityStats> qualityMap, List<String> sortedKeys) {
