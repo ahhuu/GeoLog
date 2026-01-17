@@ -42,9 +42,11 @@ import java.text.DecimalFormatSymbols;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import org.achartengine.ChartFactory;
 import org.achartengine.GraphicalView;
@@ -98,12 +100,15 @@ public class PlotFragment extends Fragment {
   private XYMultipleSeriesRenderer mCurrentRenderer;
   private LinearLayout mLayout;
   private int mCurrentTab = 0;
+  private FieldLogger mPlotLogger;
+  private final Set<Integer> mLoggedUnsupportedConstellations = new HashSet<>();
 
   @Override
   public View onCreateView(
       LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
     View plotView = inflater.inflate(R.layout.fragment_plot, container, false /* attachToRoot */);
 
+    mPlotLogger = new FieldLogger(requireContext(), "plot");
     mDataSetManager =
         new DataSetManager(NUMBER_OF_TABS, NUMBER_OF_CONSTELLATIONS, getContext(), mColorMap);
 
@@ -207,9 +212,12 @@ public class PlotFragment extends Fragment {
     for (GnssMeasurement measurement : measurements) {
       int constellationType = measurement.getConstellationType();
       int svID = measurement.getSvid();
-      if (constellationType != GnssStatus.CONSTELLATION_UNKNOWN) {
+      if (constellationType != GnssStatus.CONSTELLATION_UNKNOWN
+          && isSupportedConstellation(constellationType)) {
         mDataSetManager.addValue(
             CN0_TAB, constellationType, svID, mLastTimeReceivedSeconds, measurement.getCn0DbHz());
+      } else {
+        logUnsupported(constellationType, measurement);
       }
     }
 
@@ -246,6 +254,25 @@ public class PlotFragment extends Fragment {
       }
     }
     mDataSetManager.fillInDiscontinuity(PR_RESIDUAL_TAB, timeSinceLastMeasurement);
+  }
+
+  private boolean isSupportedConstellation(int constellationType) {
+    return constellationType > GnssStatus.CONSTELLATION_UNKNOWN
+        && constellationType <= NUMBER_OF_CONSTELLATIONS;
+  }
+
+  private void logUnsupported(int constellationType, GnssMeasurement measurement) {
+    if (mPlotLogger == null || constellationType == GnssStatus.CONSTELLATION_UNKNOWN) return;
+    if (mLoggedUnsupportedConstellations.add(constellationType)) {
+      double freqMhz = measurement.getCarrierFrequencyHz() / 1e6;
+      mPlotLogger.write(
+          "Skip unsupported constellation type="
+              + constellationType
+              + " svid="
+              + measurement.getSvid()
+              + " freqMhz="
+              + sDataFormat.format(freqMhz));
+    }
   }
 
   private List<GnssMeasurement> sortByCarrierToNoiseRatio(List<GnssMeasurement> measurements) {
@@ -330,6 +357,10 @@ public class PlotFragment extends Fragment {
     private final List<XYMultipleSeriesRenderer>[] mRendererList;
     private final Context mContext;
     private final ColorMap mColorMap;
+    private boolean isSupportedConstellation(int constellationType) {
+      return constellationType > GnssStatus.CONSTELLATION_UNKNOWN
+          && constellationType <= NUMBER_OF_CONSTELLATIONS;
+    }
 
     public DataSetManager(
         int numberOfTabs, int numberOfConstellations, Context context, ColorMap colorMap) {
@@ -383,6 +414,9 @@ public class PlotFragment extends Fragment {
      */
     private void addValue(
         int tab, int constellationType, int svID, double timeInSeconds, double value) {
+      if (!isSupportedConstellation(constellationType)) {
+        return;
+      }
       XYMultipleSeriesDataset dataSetAll = getDataSet(tab, DATA_SET_INDEX_ALL);
       XYMultipleSeriesRenderer rendererAll = getRenderer(tab, DATA_SET_INDEX_ALL);
       value = Double.parseDouble(sDataFormat.format(value));
@@ -431,6 +465,9 @@ public class PlotFragment extends Fragment {
 
     /** Returns a boolean indicating whether the input satellite has been seen. */
     private boolean hasSeen(int constellationType, int svID, int tab) {
+      if (!isSupportedConstellation(constellationType)) {
+        return false;
+      }
       return mSatelliteIndex[tab].get(constellationType).containsKey(svID);
     }
 
