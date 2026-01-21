@@ -4,11 +4,9 @@ import android.content.Context;
 import android.location.GnssClock;
 import android.location.GnssMeasurement;
 import android.location.GnssMeasurementsEvent;
-import android.location.GnssNavigationMessage;
 import android.location.GnssStatus;
 import android.location.Location;
 import android.os.Build;
-import android.os.SystemClock;
 import android.util.Log;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -23,11 +21,10 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.TreeMap; // Added for sorting GLONASS slots
+import java.util.TreeMap;
 
 /**
  * A logger that converts GNSS measurements to RINEX 3.05 format.
@@ -70,9 +67,9 @@ public class RinexLogger {
     private static final int LLI_BOCTRK = 0x04;
 
     // Thresholds (Relaxed for Android devices)
-    private static final double MAXPRRUNCMPS = 100.0; // Modified from 10.0
+    private static final double MAXPRRUNCMPS = 100.0;
     private static final double MAXTOWUNCNS = 500.0;
-    private static final double MAXADRUNCNS = 10.0;   // Modified from 1.0
+    private static final double MAXADRUNCNS = 10.0;
 
     private final Context mContext;
     private File mRinexFile;
@@ -81,11 +78,11 @@ public class RinexLogger {
     private boolean mIsLogging = false;
 
     // Accumulated data for Header
-    // Signal list per system [freq_index] -> signal_name
+    // Signal list per system [freq_index] -> signal_name (e.g., "1C", "5P")
     private String[][] mSignals = new String[MAX_SYS][MAX_FRQ];
     private int[] mNumSignals = new int[MAX_SYS];
 
-    // --- NEW: Store GLONASS Frequency Numbers (k) ---
+    // GLONASS Frequency Numbers (k)
     private final Map<Integer, Integer> mGlonassFreqMap = new HashMap<>();
 
     // Reference Clock State for Continuity
@@ -113,7 +110,7 @@ public class RinexLogger {
             Arrays.fill(mSignals[i], "");
             mNumSignals[i] = 0;
         }
-        mGlonassFreqMap.clear(); // Reset GLONASS map
+        mGlonassFreqMap.clear();
         mFirstObsSet = false;
         mFirstObsTime = null;
         mLastHwClockDiscontinuityCount = -1;
@@ -223,10 +220,20 @@ public class RinexLogger {
             int sysId = getSystemId(constType);
             if (sysId == -1) continue;
 
-            String signalName = identifySignal(sysId, m.getCarrierFrequencyHz());
-            if (signalName.isEmpty()) continue;
+            // --- MODIFIED: Smart Signal Identification using CodeType ---
+            String rawCodeType = "";
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                if (m.hasCodeType()) {
+                    rawCodeType = m.getCodeType();
+                }
+            }
+            // Use the new smart logic
+            String signalName = getSmartSignalCode(sysId, m.getCarrierFrequencyHz(), rawCodeType);
 
-            // --- NEW: Detect and Store GLONASS Frequency Slot (k) ---
+            if (signalName == null || signalName.isEmpty()) continue;
+            // ------------------------------------------------------------
+
+            // GLONASS Frequency Slot
             if (sysId == SYS_GLO) {
                 int svid = m.getSvid();
                 Integer k = calculateGlonassSlot(m.getCarrierFrequencyHz());
@@ -234,7 +241,6 @@ public class RinexLogger {
                     mGlonassFreqMap.put(svid, k);
                 }
             }
-            // --------------------------------------------------------
 
             int freqIndex = registerSignal(sysId, signalName);
             if (freqIndex == -1) continue;
@@ -244,23 +250,17 @@ public class RinexLogger {
             double rawCarrierFreqHz = m.getCarrierFrequencyHz();
             if (rawCarrierFreqHz == 0) continue;
 
-            // --- MODIFIED: Use Nominal Frequency for Wavelength Calculation ---
-            // This is critical for PPP to ensure wavelength consistency
+            // Use Nominal Frequency for Wavelength Calculation
             double nominalFreq = getNominalFrequency(sysId, rawCarrierFreqHz, m.getSvid());
             double wavl = CLIGHT / nominalFreq;
-            // ------------------------------------------------------------------
 
             double prSeconds = calculatePseudorangeSeconds(clock, m, sysId, mRefFullBiasNanos, mRefBiasNanos);
             if (prSeconds < 0 || prSeconds > 0.5) continue;
 
             double pseudoRange = prSeconds * CLIGHT;
             double accumulatedDeltaRange = m.getAccumulatedDeltaRangeMeters();
-
-            // --- MODIFIED: Use Division for Phase (consistent with Whitepaper) ---
             double carrierPhase = accumulatedDeltaRange / wavl;
             double doppler = -m.getPseudorangeRateMetersPerSecond() / wavl;
-            // -------------------------------------------------------------------
-
             double cno = m.getCn0DbHz();
             int adrState = m.getAccumulatedDeltaRangeState();
 
@@ -326,14 +326,71 @@ public class RinexLogger {
         }
     }
 
-    // --- NEW: Calculate GLONASS Slot Number (k) ---
+    // --- NEW: Smart Signal Logic ---
+    private String getSmartSignalCode(int sys, double carrierFreqHz, String androidCodeType) {
+        // 1. Pre-process
+        double freqMhz = Math.round(carrierFreqHz / 1e5) / 10.0;
+        String rawCode = (androidCodeType == null) ? "" : androidCodeType;
+
+        // 2. Define Band ID and Default Attribute
+        String bandId = "";
+        String defaultAttr = "";
+
+        // --- BDS B1I (1561.098 MHz) -> Band 2 ---
+        if (sys == SYS_BDS && Math.abs(freqMhz - 1561.1) < 1.0) {
+            bandId = "2";
+            defaultAttr = "I";
+        }
+        // --- Band 1: L1 / E1 / B1C / G1 ---
+        else if (Math.abs(freqMhz - 1575.4) < 1.0 || (sys == SYS_GLO && freqMhz > 1590 && freqMhz < 1615)) {
+            bandId = "1";
+            if (sys == SYS_BDS) defaultAttr = "P"; // B1C default Pilot
+            else defaultAttr = "C";                // GPS/GLO/GAL default C/A or Pilot
+        }
+        // --- Band 5: L5 / E5a / B2a / QZS-L5 ---
+        else if (Math.abs(freqMhz - 1176.4) < 1.0) {
+            bandId = "5";
+            if (sys == SYS_BDS) defaultAttr = "P"; // B2a default Pilot
+            else defaultAttr = "Q";                // GPS/GAL default Quadrature
+        }
+        // --- Band 2: L2 / G2 ---
+        else if (Math.abs(freqMhz - 1227.6) < 1.0 || (sys == SYS_GLO && freqMhz > 1230 && freqMhz < 1260)) {
+            bandId = "2";
+            defaultAttr = "C";
+        }
+        // --- Band 7: E5b / B2b ---
+        else if (Math.abs(freqMhz - 1207.1) < 1.0) {
+            bandId = "7";
+            if (sys == SYS_BDS) defaultAttr = "I";
+            else defaultAttr = "Q"; // GAL E5b default Q
+        }
+        // --- Band 6: B3I ---
+        else if (Math.abs(freqMhz - 1268.5) < 1.0) {
+            bandId = "6";
+            defaultAttr = "I";
+        }
+
+        // 3. Assembly
+        if (bandId.isEmpty()) return null;
+
+        String finalAttr = rawCode.isEmpty() ? defaultAttr : rawCode;
+
+        // 4. Correction / Translation (Fix Inconsistencies)
+        // Fix BDS B2a: Android "Q" -> RINEX "P"
+        if (sys == SYS_BDS && "5".equals(bandId) && "Q".equals(finalAttr)) {
+            finalAttr = "P";
+        }
+
+        return bandId + finalAttr; // e.g., "1C", "5P", "2I"
+    }
+    // -------------------------------------------------------
+
+    // Calculate GLONASS Slot Number (k)
     private Integer calculateGlonassSlot(double freq) {
-        // G1: 1602 + k*0.5625
         if (freq > 1.59e9) {
             double k = (freq - 1602.0e6) / 0.5625e6;
             return (int) Math.round(k);
         }
-        // G2: 1246 + k*0.4375
         if (freq > 1.23e9 && freq < 1.26e9) {
             double k = (freq - 1246.0e6) / 0.4375e6;
             return (int) Math.round(k);
@@ -341,29 +398,21 @@ public class RinexLogger {
         return null;
     }
 
-    // --- NEW: Get Nominal Frequency for Phase Conversion ---
     private double getNominalFrequency(int sysId, double rawFreq, int svid) {
         if (sysId == SYS_GLO) {
             Integer k = mGlonassFreqMap.get(svid);
             if (k != null) {
                 // Reconstruct exact FDMA frequency
-                if (rawFreq > 1.5e9) { // G1
-                    return 1602.0e6 + k * 0.5625e6;
-                } else { // G2
-                    return 1246.0e6 + k * 0.4375e6;
-                }
+                if (rawFreq > 1.5e9) return 1602.0e6 + k * 0.5625e6;
+                else return 1246.0e6 + k * 0.4375e6;
             }
-            // Fallback if k unknown (shouldn't happen if calculateGlonassSlot works)
             return rawFreq;
         } else if (sysId == SYS_BDS) {
-            // Handle BDS B1I specifically
             if (Math.abs(rawFreq - 1561.098e6) < 1.0e6) {
                 return 1561.098e6;
             }
         }
-
-        // For CDMA systems (GPS, GAL, QZSS, other BDS), round to nearest 1kHz
-        // to remove Doppler and clock drift
+        // For CDMA systems (GPS, GAL, QZSS, BDS, others), round to nearest 1kHz
         return Math.round(rawFreq / 1000.0) * 1000.0;
     }
 
@@ -436,35 +485,6 @@ public class RinexLogger {
         if (m.getAccumulatedDeltaRangeUncertaintyMeters() > MAXADRUNCNS) return false;
 
         return true;
-    }
-
-    private String identifySignal(int sysId, double freqHz) {
-        // --- MODIFIED: Updated mappings to RINEX 3.05 (2I, 1P, 5P) ---
-        double freq = freqHz;
-        if (sysId == SYS_GPS) {
-            if (isApprox(freq, 1575420000)) return "L1C";
-            if (isApprox(freq, 1176450000)) return "L5Q";
-        } else if (sysId == SYS_GLO) {
-            // GLO check needs wide tolerance for FDMA, handled in getNominalFrequency
-            if (freq > 1.59e9) return "L1C"; // G1
-            if (freq > 1.23e9 && freq < 1.26e9) return "L2C"; // G2
-        } else if (sysId == SYS_BDS) {
-            if (isApprox(freq, 1561098000)) return "B2I"; // Maps to C2I in RINEX 3.05
-            if (isApprox(freq, 1575420000)) return "B1P"; // Maps to C1P
-            if (isApprox(freq, 1176450000)) return "B5P"; // Maps to C5P
-        } else if (sysId == SYS_GAL) {
-            if (isApprox(freq, 1575420000)) return "E1C";
-            if (isApprox(freq, 1176450000)) return "E5Q";
-            if (isApprox(freq, 1207140000)) return "E7Q";
-        } else if (sysId == SYS_QZS) {
-            if (isApprox(freq, 1575420000)) return "L1C";
-            if (isApprox(freq, 1176450000)) return "L5Q";
-        }
-        return "";
-    }
-
-    private boolean isApprox(double v1, double v2) {
-        return Math.abs(v1 - v2) < 10000;
     }
 
     private int registerSignal(int sys, String sig) {
@@ -568,7 +588,8 @@ public class RinexLogger {
         writer.write(String.format(Locale.US, "%14.4f%14.4f%14.4f                  APPROX POSITION XYZ \n", mApproxPos[0], mApproxPos[1], mApproxPos[2]));
         writer.write("        0.0000        0.0000        0.0000                  ANTENNA: DELTA H/E/N\n");
 
-        // --- MODIFIED: Header Signal Types Alignment Logic ---
+        // --- MODIFIED: Simplified Header Generation ---
+        // Since getSmartSignalCode() returns standard codes (e.g. "1C", "5P"),
         char[] sysChars = {'G', 'R', 'E', 'C', 'J'};
         int[] sysIds = {SYS_GPS, SYS_GLO, SYS_GAL, SYS_BDS, SYS_QZS};
 
@@ -578,26 +599,17 @@ public class RinexLogger {
             if (mNumSignals[idx] > 0) {
                 List<String> codes = new ArrayList<>();
                 for (int i = 0; i < mNumSignals[idx]; i++) {
-                    String sig = mSignals[idx][i];
-                    String suf;
-                    // Map Internal names to RINEX 3.05 Codes
-                    if (sig.equals("B2I")) suf = "2I"; // BDS B1I
-                    else if (sig.equals("B1P")) suf = "1P"; // BDS B1C
-                    else if (sig.equals("B5P")) suf = "5P"; // BDS B2a
-                    else suf = sig.substring(1);
-
+                    String suf = mSignals[idx][i]; // e.g. "1C", "5P"
                     codes.add("C"+suf); codes.add("L"+suf); codes.add("D"+suf); codes.add("S"+suf);
                 }
 
                 int nObs = codes.size();
-                // Print first line: Sys + Count + first 13 codes
                 List<String> firstBatch = codes.subList(0, Math.min(codes.size(), 13));
                 StringBuilder sb = new StringBuilder();
                 for(String c : firstBatch) sb.append(String.format("%-4s", c));
 
                 writer.write(String.format(Locale.US, "%c  %3d %-52s SYS / # / OBS TYPES \n", sysChars[k], nObs, sb.toString()));
 
-                // Subsequent lines
                 for (int i = 13; i < codes.size(); i += 13) {
                     List<String> batch = codes.subList(i, Math.min(codes.size(), i + 13));
                     sb = new StringBuilder();
@@ -608,9 +620,8 @@ public class RinexLogger {
         }
         // -----------------------------------------------------
 
-        // --- NEW: GLONASS SLOT / FRQ # Header ---
         if (!mGlonassFreqMap.isEmpty()) {
-            Map<Integer, Integer> sortedSlots = new TreeMap<>(mGlonassFreqMap); // Sort by PRN
+            Map<Integer, Integer> sortedSlots = new TreeMap<>(mGlonassFreqMap);
             int count = 0;
             int numGlo = sortedSlots.size();
 
@@ -623,7 +634,7 @@ public class RinexLogger {
 
                 if (count == 8) {
                     writer.write(String.format(Locale.US, "%-60sGLONASS SLOT / FRQ #\n", sb.toString()));
-                    sb = new StringBuilder("    "); // Indent 4 spaces
+                    sb = new StringBuilder("    ");
                     count = 0;
                 }
             }
@@ -631,7 +642,6 @@ public class RinexLogger {
                 writer.write(String.format(Locale.US, "%-60sGLONASS SLOT / FRQ #\n", sb.toString()));
             }
         }
-        // ----------------------------------------
 
         if (mFirstObsTime != null) {
             java.util.Calendar cal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"));
@@ -648,8 +658,6 @@ public class RinexLogger {
 
         writer.write("                                                            END OF HEADER       \n");
     }
-
-    // Helpers
 
     private int getSystemId(int constType) {
         switch (constType) {
@@ -709,7 +717,6 @@ public class RinexLogger {
         return new double[]{x, y, z};
     }
 
-    // Inner Classes
     private static class RnxSat {
         int sys;
         int prn;
