@@ -627,14 +627,24 @@ public class LoggerFragment extends Fragment implements TimerListener, Measureme
 
             private String getStateString(int state) {
                 StringBuilder sb = new StringBuilder();
+                appendFlag(sb, state, GnssMeasurement.STATE_UNKNOWN, "UNKNOWN");
                 appendFlag(sb, state, GnssMeasurement.STATE_CODE_LOCK, "CODE_LOCK");
                 appendFlag(sb, state, GnssMeasurement.STATE_BIT_SYNC, "BIT_SYNC");
                 appendFlag(sb, state, GnssMeasurement.STATE_SUBFRAME_SYNC, "SUBFRAME_SYNC");
+                appendFlag(sb, state, GnssMeasurement.STATE_TOW_KNOWN, "TOW_KNOWN");
                 appendFlag(sb, state, GnssMeasurement.STATE_TOW_DECODED, "TOW_DECODED");
                 appendFlag(sb, state, GnssMeasurement.STATE_MSEC_AMBIGUOUS, "MSEC_AMBIGUOUS");
                 appendFlag(sb, state, GnssMeasurement.STATE_SYMBOL_SYNC, "SYMBOL_SYNC");
+                appendFlag(sb, state, GnssMeasurement.STATE_2ND_CODE_LOCK, "2ND_CODE_LOCK");
+                appendFlag(sb, state, GnssMeasurement.STATE_GLO_TOD_KNOWN, "GLO_TOD_KNOWN");
                 appendFlag(sb, state, GnssMeasurement.STATE_GLO_STRING_SYNC, "GLO_STR_SYNC");
                 appendFlag(sb, state, GnssMeasurement.STATE_GLO_TOD_DECODED, "GLO_TOD_DECODED");
+                appendFlag(sb, state, GnssMeasurement.STATE_GAL_E1BC_CODE_LOCK, "GAL_E1BC_CODE_LOCK");
+                appendFlag(sb, state, GnssMeasurement.STATE_GAL_E1B_PAGE_SYNC, "GAL_E1B_PAGE_SYNC");
+                appendFlag(sb, state, GnssMeasurement.STATE_GAL_E1C_2ND_CODE_LOCK, "GAL_E1C_2ND_CODE_LOCK");
+                appendFlag(sb, state, GnssMeasurement.STATE_BDS_D2_BIT_SYNC, "BDS_D2_BIT_SYNC");
+                appendFlag(sb, state, GnssMeasurement.STATE_BDS_D2_SUBFRAME_SYNC, "BDS_D2_SUBFRAME_SYNC");
+                appendFlag(sb, state, GnssMeasurement.STATE_SBAS_SYNC, "SBAS_SYNC");
                 return sb.toString();
             }
 
