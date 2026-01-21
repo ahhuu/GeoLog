@@ -32,8 +32,3 @@
     <li><b>Residual Plot:</b> Configure ground truth for residual analysis.</li>
 </ul>
 
-<p><b>Status Tab:</b></p>
-<ul>
-    <li>View detailed signal strength (C/N0), cycle slips, and multipath indicators.</li>
-</ul>
-
