@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
-    package="cn.swjtu.geolog" >
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
@@ -19,6 +18,8 @@
     <uses-permission android:name="com.google.android.providers.gsf.permission.READ_GSERVICES"/>
     <uses-permission android:name="com.google.android.providers.gsf.permission.WRITE_GSERVICES"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <!-- Android 14+: declare the specific FGS permission matching the service type -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
 
     <queries>
@@ -65,7 +66,8 @@
         </provider>
         <service android:name="cn.swjtu.geolog.TimerService"
             android:exported="false"
-            android:description="@string/timer_service_name" />
+            android:description="@string/timer_service_name"
+            android:foregroundServiceType="dataSync" />
         <receiver
             android:name="cn.swjtu.geolog.DetectedActivitiesIntentReceiver"
             android:exported="false" />

@@ -40,11 +40,16 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentStatePagerAdapter;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 import androidx.viewpager.widget.ViewPager;
+import android.view.View;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.GoogleApiClient.ConnectionCallbacks;
@@ -171,7 +176,85 @@ public class MainActivity extends AppCompatActivity
     editor.putBoolean(SettingsFragment.PREFERENCE_KEY_AUTO_SCROLL, false);
     editor.commit();
     super.onCreate(savedInstanceState);
+
+    WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+
+    int actionBarColor = 0xFF212121;
+    getWindow().setStatusBarColor(actionBarColor);
+
+    WindowInsetsControllerCompat windowInsetsController = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+    if (windowInsetsController != null) {
+      windowInsetsController.setAppearanceLightStatusBars(false);
+    }
+    
     setContentView(R.layout.activity_main);
+
+    if (getSupportActionBar() != null) {
+      getWindow().getDecorView().post(() -> {
+        getWindow().setStatusBarColor(actionBarColor);
+      });
+    }
+
+    View mainContentContainer = findViewById(R.id.main_content_container);
+    if (mainContentContainer != null) {
+      ViewCompat.setOnApplyWindowInsetsListener(mainContentContainer, (v, windowInsets) -> {
+        int systemBars = WindowInsetsCompat.Type.systemBars();
+        androidx.core.graphics.Insets insets = windowInsets.getInsets(systemBars);
+        int topInset = insets.top;
+        int bottomInset = insets.bottom;
+
+        int actionBarHeight = 0;
+        if (getSupportActionBar() != null) {
+          actionBarHeight = getSupportActionBar().getHeight();
+        }
+
+        int finalTopPadding = topInset + actionBarHeight;
+
+        v.setPadding(
+            v.getPaddingLeft(),
+            finalTopPadding,
+            v.getPaddingRight(),
+            bottomInset
+        );
+
+        return windowInsets;
+      });
+
+      mainContentContainer.post(() -> {
+        ViewCompat.requestApplyInsets(mainContentContainer);
+      });
+    }
+
+    View settingsContainer = findViewById(R.id.settings_container);
+    if (settingsContainer != null) {
+      ViewCompat.setOnApplyWindowInsetsListener(settingsContainer, (v, windowInsets) -> {
+        int systemBars = WindowInsetsCompat.Type.systemBars();
+        androidx.core.graphics.Insets insets = windowInsets.getInsets(systemBars);
+        int topInset = insets.top;
+        int bottomInset = insets.bottom;
+
+        int actionBarHeight = 0;
+        if (getSupportActionBar() != null) {
+          actionBarHeight = getSupportActionBar().getHeight();
+        }
+
+        int finalTopPadding = topInset + actionBarHeight;
+
+        v.setPadding(
+            v.getPaddingLeft(),
+            finalTopPadding,
+            v.getPaddingRight(),
+            bottomInset
+        );
+
+        return windowInsets;
+      });
+
+      settingsContainer.post(() -> {
+        ViewCompat.requestApplyInsets(settingsContainer);
+      });
+    }
+    
     buildGoogleApiClient();
     requestPermissionAndSetupFragments(this);
 
@@ -199,6 +282,12 @@ public class MainActivity extends AppCompatActivity
                       .replace(R.id.settings_container, mSettingsFragment)
                       .addToBackStack("settings")
                       .commit();
+                  View settingsContainer = findViewById(R.id.settings_container);
+                  if (settingsContainer != null) {
+                    settingsContainer.post(() -> {
+                      ViewCompat.requestApplyInsets(settingsContainer);
+                    });
+                  }
               }
           }
           return true;

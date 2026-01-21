@@ -52,7 +52,7 @@ public class TimerService extends Service {
      *
      * @param values The set {@link TimerValues}
      */
-    public void processTimerValues(TimerValues values);
+    void processTimerValues(TimerValues values);
   }
 
   /** A {@link Binder} that exposes a {@link TimerService}. */
@@ -79,7 +79,13 @@ public class TimerService extends Service {
     NotificationManagerCompat manager = NotificationManagerCompat.from(this);
     manager.createNotificationChannel(channel);
     Notification notification =
-        new NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID).build();
+        new NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
+            .setSmallIcon(R.mipmap.geolog2_round)
+            .setContentTitle("GeoLog 正在运行")
+            .setContentText("计时服务在前台运行")
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .build();
     startForeground(NOTIFICATION_ID, notification);
     return mBinder;
   }
