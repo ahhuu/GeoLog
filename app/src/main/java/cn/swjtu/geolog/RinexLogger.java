@@ -459,8 +459,11 @@ public class RinexLogger {
 
     private boolean isMeasurementValid(GnssMeasurement m, int sysId) {
         int state = m.getState();
+
+        // 1. MSEC AMBIGUOUS
         if ((state & STATE_MSEC_AMBIGUOUS) != 0) return false;
 
+        // 2. Time Decoded (TOW / TOD)
         boolean towDecoded = false;
         if (sysId == SYS_GLO) {
             towDecoded = (state & STATE_GLO_TOD_DECODED) != 0;
@@ -469,17 +472,18 @@ public class RinexLogger {
         }
         if (!towDecoded) return false;
 
+        // 3. Code Lock
         boolean codeLock = false;
         if (sysId == SYS_GAL) {
-            codeLock = (state & STATE_GAL_E1BC_CODE_LOCK) != 0 || (state & STATE_GAL_E1C_2ND_CODE_LOCK) != 0;
-            if (!codeLock) return false;
-        }
-        else if (sysId == SYS_GPS || sysId == SYS_BDS || sysId == SYS_QZS) {
-            if ((state & STATE_CODE_LOCK) == 0) return false;
-        } else if (sysId == SYS_GLO) {
-            if ((state & STATE_GLO_STRING_SYNC) == 0) return false;
+            codeLock = (state & STATE_GAL_E1BC_CODE_LOCK) != 0 ||
+                    (state & STATE_GAL_E1C_2ND_CODE_LOCK) != 0;
+        } else {
+            codeLock = (state & STATE_CODE_LOCK) != 0;
         }
 
+        if (!codeLock) return false;
+
+        // Uncertainty checks
         if (m.getPseudorangeRateUncertaintyMetersPerSecond() > MAXPRRUNCMPS) return false;
         if (m.getReceivedSvTimeUncertaintyNanos() > MAXTOWUNCNS) return false;
         if (m.getAccumulatedDeltaRangeUncertaintyMeters() > MAXADRUNCNS) return false;
