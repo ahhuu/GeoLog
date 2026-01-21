@@ -52,9 +52,20 @@ public class StatusFragment extends Fragment implements MeasurementListener {
 
     private static final int ADR_STATE_VALID = GnssMeasurement.ADR_STATE_VALID;
     private static final int ADR_STATE_CYCLE_SLIP = GnssMeasurement.ADR_STATE_CYCLE_SLIP;
+    // Measurement state bits
+    private static final int STATE_CODE_LOCK = 1;       // 2^0
+    private static final int STATE_TOW_DECODED = 8;     // 2^3
+    private static final int STATE_MSEC_AMBIGUOUS = 16; // 2^4
+    private static final int STATE_GLO_TOD_DECODED = 128; // 2^7
+    private static final int STATE_GAL_E1C_2ND_CODE_LOCK = 2048; // 2^11
+    private static final int STATE_GAL_E1BC_CODE_LOCK = 1024; // 2^10
+    // System IDs used for quick checks
+    private static final int SYS_GPS = 1;
+    private static final int SYS_GLO = 3;
+    private static final int SYS_QZS = 4;
+    private static final int SYS_BDS = 5;
+    private static final int SYS_GAL = 6;
 
-    private final long uiThrottleMs = 500; // throttle UI updates
-    private long lastUiUpdate = 0;
     private FieldLogger fieldLogger;
     private static final String[] QUALITY_BAND_ORDER = {
         "L1/E1/B1C", "L2", "L5/E5a/B2a", "E5b/B2b", "E5", "E6/L6", "B1I", "B3I",
@@ -128,9 +139,6 @@ public class StatusFragment extends Fragment implements MeasurementListener {
     @Override
     public void onGnssMeasurementsReceived(GnssMeasurementsEvent event) {
         if (!isAdded() || getActivity() == null || getView() == null || event == null) return;
-        long now = System.currentTimeMillis();
-        if (now - lastUiUpdate < uiThrottleMs) return; // throttle
-        lastUiUpdate = now;
         try {
             int n = (event.getMeasurements() != null) ? event.getMeasurements().size() : -1;
             fieldLogger.write("Measurements count=" + n);
@@ -195,7 +203,7 @@ public class StatusFragment extends Fragment implements MeasurementListener {
             }
             int[] counts = sysStatusMap.get(sysKey);
             counts[0]++; // Total
-            if ((m.getState() & GnssMeasurement.STATE_CODE_LOCK) != 0) {
+            if (isMeasurementUsed(m)) {
                 counts[1]++; // Used
             } else {
                 counts[2]++; // Unused
@@ -420,6 +428,43 @@ public class StatusFragment extends Fragment implements MeasurementListener {
         String band = getCarrierFrequencyLabel(constType, freqMhz);
 
         return sys + " " + band;
+    }
+
+    private boolean isMeasurementUsed(GnssMeasurement m) {
+        int state = m.getState();
+        int sysId = getSystemId(m.getConstellationType());
+
+        // 1. Reject ambiguous millisecond
+        if ((state & STATE_MSEC_AMBIGUOUS) != 0) return false;
+
+        // 2. Require decoded time (TOW / TOD)
+        boolean towDecoded = (sysId == SYS_GLO) ?
+                ((state & STATE_GLO_TOD_DECODED) != 0) :
+                ((state & STATE_TOW_DECODED) != 0);
+        if (!towDecoded) return false;
+
+        // 3. Require code lock with Galileo nuance
+        boolean codeLock = (sysId == SYS_GAL) ?
+                ((state & STATE_GAL_E1BC_CODE_LOCK) != 0 || (state & STATE_GAL_E1C_2ND_CODE_LOCK) != 0) :
+                ((state & STATE_CODE_LOCK) != 0);
+        return codeLock;
+    }
+
+    private int getSystemId(int constellationType) {
+        switch (constellationType) {
+            case GnssStatus.CONSTELLATION_GPS:
+                return SYS_GPS;
+            case GnssStatus.CONSTELLATION_GLONASS:
+                return SYS_GLO;
+            case GnssStatus.CONSTELLATION_QZSS:
+                return SYS_QZS;
+            case GnssStatus.CONSTELLATION_BEIDOU:
+                return SYS_BDS;
+            case GnssStatus.CONSTELLATION_GALILEO:
+                return SYS_GAL;
+            default:
+                return -1;
+        }
     }
 
     private String getCarrierFrequencyLabel(int constellationType, double freqMhz) {
