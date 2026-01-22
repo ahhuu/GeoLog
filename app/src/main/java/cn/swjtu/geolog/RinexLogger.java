@@ -380,9 +380,13 @@ public class RinexLogger {
             finalAttr = "P";
         }
 
-        return bandId + finalAttr; // e.g., "1C", "5P", "2I"
+        // 5. Ignore 1L measurements
+        if ("1".equals(bandId) && "L".equals(finalAttr)) {
+            return null; // Return null to skip this measurement
+        }
+
+        return bandId + finalAttr;
     }
-    // -------------------------------------------------------
 
     // Calculate GLONASS Slot Number (k)
     private Integer calculateGlonassSlot(double freq) {
@@ -514,7 +518,22 @@ public class RinexLogger {
     }
 
     private void writeEpoch(Date time, List<RnxSat> sats) throws IOException {
-        Collections.sort(sats, new Comparator<RnxSat>() {
+        // 过滤所有观测值全为0的卫星
+        List<RnxSat> validSats = new ArrayList<>();
+        for (RnxSat sat : sats) {
+            boolean allZero = true;
+            for (int i = 0; i < MAX_FRQ; i++) {
+                if (Math.abs(sat.p[i]) > NEAR_ZERO || Math.abs(sat.l[i]) > NEAR_ZERO ||
+                        Math.abs(sat.d[i]) > NEAR_ZERO || Math.abs(sat.s[i]) > NEAR_ZERO) {
+                    allZero = false;
+                    break;
+                }
+            }
+            if (!allZero) validSats.add(sat);
+        }
+
+        // 排序
+        Collections.sort(validSats, new Comparator<RnxSat>() {
             @Override
             public int compare(RnxSat o1, RnxSat o2) {
                 int p1 = getSystemPriority(o1.sys);
@@ -534,10 +553,10 @@ public class RinexLogger {
                 cal.get(java.util.Calendar.HOUR_OF_DAY),
                 cal.get(java.util.Calendar.MINUTE),
                 (double)cal.get(java.util.Calendar.SECOND) + (cal.get(java.util.Calendar.MILLISECOND)/1000.0),
-                sats.size()));
+                validSats.size()));
         mBodyWriter.newLine();
 
-        for (RnxSat sat : sats) {
+        for (RnxSat sat : validSats) {
             char sysChar = getSystemChar(sat.sys);
             int prn = sat.prn;
             if (sat.sys == SYS_QZS) {
@@ -561,6 +580,7 @@ public class RinexLogger {
             mBodyWriter.newLine();
         }
     }
+
 
     private String formatObs(double val) {
         if (Math.abs(val) < NEAR_ZERO) return "                ";
