@@ -52,6 +52,7 @@ public class StatusFragment extends Fragment implements MeasurementListener {
 
     private static final int ADR_STATE_VALID = GnssMeasurement.ADR_STATE_VALID;
     private static final int ADR_STATE_CYCLE_SLIP = GnssMeasurement.ADR_STATE_CYCLE_SLIP;
+    private static final int ADR_STATE_RESET = GnssMeasurement.ADR_STATE_RESET;
     // Measurement state bits
     private static final int STATE_CODE_LOCK = 1;       // 2^0
     private static final int STATE_TOW_DECODED = 8;     // 2^3
@@ -188,7 +189,7 @@ public class StatusFragment extends Fragment implements MeasurementListener {
             QualityStats stats = qualityMap.get(freqLabel);
             stats.total++;
             if ((m.getAccumulatedDeltaRangeState() & ADR_STATE_VALID) != 0) stats.validAdr++;
-            if ((m.getAccumulatedDeltaRangeState() & ADR_STATE_CYCLE_SLIP) != 0) stats.cycleSlip++;
+            if ((m.getAccumulatedDeltaRangeState() & ADR_STATE_CYCLE_SLIP) != 0  || (m.getAccumulatedDeltaRangeState() & ADR_STATE_RESET) != 0) stats.cycleSlip++;
             if (m.getMultipathIndicator() == GnssMeasurement.MULTIPATH_INDICATOR_DETECTED) stats.multipath++;
 
             // C/N0 Map - use System Key (Restored)
@@ -433,6 +434,8 @@ public class StatusFragment extends Fragment implements MeasurementListener {
     private boolean isMeasurementUsed(GnssMeasurement m) {
         int state = m.getState();
         int sysId = getSystemId(m.getConstellationType());
+        double freqMhz = m.getCarrierFrequencyHz() / 1e6;
+        String band = getCarrierFrequencyLabel(m.getConstellationType(), freqMhz);
 
         // 1. Reject ambiguous millisecond
         if ((state & STATE_MSEC_AMBIGUOUS) != 0) return false;
@@ -444,9 +447,12 @@ public class StatusFragment extends Fragment implements MeasurementListener {
         if (!towDecoded) return false;
 
         // 3. Require code lock with Galileo nuance
-        boolean codeLock = (sysId == SYS_GAL) ?
-                ((state & STATE_GAL_E1BC_CODE_LOCK) != 0 || (state & STATE_GAL_E1C_2ND_CODE_LOCK) != 0) :
-                ((state & STATE_CODE_LOCK) != 0);
+        boolean codeLock;
+        if (sysId == SYS_GAL && "E1".equals(band)) {
+            codeLock = ((state & STATE_GAL_E1BC_CODE_LOCK) != 0 || (state & STATE_GAL_E1C_2ND_CODE_LOCK) != 0);
+        } else {
+            codeLock = ((state & STATE_CODE_LOCK) != 0);
+        }
         return codeLock;
     }
 
