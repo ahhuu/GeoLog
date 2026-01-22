@@ -244,7 +244,7 @@ public class RinexLogger {
             int freqIndex = registerSignal(sysId, signalName);
             if (freqIndex == -1) continue;
 
-            if (!isMeasurementValid(m, sysId)) continue;
+            if (!isMeasurementValid(m, sysId, signalName)) continue;
 
             double rawCarrierFreqHz = m.getCarrierFrequencyHz();
             if (rawCarrierFreqHz == 0) continue;
@@ -460,7 +460,7 @@ public class RinexLogger {
         return pr;
     }
 
-    private boolean isMeasurementValid(GnssMeasurement m, int sysId) {
+    private boolean isMeasurementValid(GnssMeasurement m, int sysId, String signalName) {
         int state = m.getState();
 
         // 1. MSEC AMBIGUOUS
@@ -477,7 +477,7 @@ public class RinexLogger {
 
         // 3. Code Lock
         boolean codeLock = false;
-        if (sysId == SYS_GAL) {
+        if (sysId == SYS_GAL && "1C".equals(signalName)) {
             codeLock = (state & STATE_GAL_E1BC_CODE_LOCK) != 0 ||
                     (state & STATE_GAL_E1C_2ND_CODE_LOCK) != 0;
         } else {
@@ -759,3 +759,4 @@ public class RinexLogger {
         return mRinexFile;
     }
 }
+
