@@ -34,7 +34,7 @@ public class RinexLogger {
     private static final String TAG = "RinexLogger";
     private static final double CLIGHT = 299792458.0;
     private static final double NEAR_ZERO = 0.0001;
-    private static final int LEAP_SECOND = 18; // As of 2021/2025
+    private static final int LEAP_SECOND = 18; // As of 2021/2026
 
     // System Constants
     private static final int SYS_GPS = 1;
@@ -46,8 +46,8 @@ public class RinexLogger {
     private static final int MAX_FRQ = 5;
 
     // Measurement States
-    private static final int STATE_CODE_LOCK = 1;       // 2^0
-    private static final int STATE_TOW_DECODED = 8;     // 2^3
+    private static final int STATE_CODE_LOCK = 1; // 2^0
+    private static final int STATE_TOW_DECODED = 8; // 2^3
     private static final int STATE_MSEC_AMBIGUOUS = 16; // 2^4
     private static final int STATE_GLO_TOD_DECODED = 128; // 2^7
     private static final int STATE_GAL_E1C_2ND_CODE_LOCK = 2048; // 2^11
@@ -65,7 +65,7 @@ public class RinexLogger {
     private static final int LLI_HALFC = 0x02;
     private static final int LLI_BOCTRK = 0x04;
 
-    // Thresholds (Relaxed for Android devices)
+    // Thresholds
     private static final double MAXPRRUNCMPS = 100.0;
     private static final double MAXTOWUNCNS = 500.0;
     private static final double MAXADRUNCNS = 10.0;
@@ -77,11 +77,8 @@ public class RinexLogger {
     private boolean mIsLogging = false;
 
     // Accumulated data for Header
-    // Signal list per system [freq_index] -> signal_name (e.g., "1C", "5P")
     private String[][] mSignals = new String[MAX_SYS][MAX_FRQ];
     private int[] mNumSignals = new int[MAX_SYS];
-
-    // GLONASS Frequency Numbers (k)
     private final Map<Integer, Integer> mGlonassFreqMap = new HashMap<>();
 
     // Reference Clock State for Continuity
@@ -89,7 +86,8 @@ public class RinexLogger {
     private long mRefFullBiasNanos = 0;
     private double mRefBiasNanos = 0.0;
 
-    private Date mFirstObsTime = null;
+    // First Observation Time (High Precision)
+    private RinexTime mFirstObsTime = null;
     private boolean mFirstObsSet = false;
 
     // Previous Epoch for Galileo check
@@ -97,7 +95,29 @@ public class RinexLogger {
     private long mPreviousEpochTimeMillis = -1;
 
     // Position
-    private double[] mApproxPos = new double[]{0.0, 0.0, 0.0};
+    private double[] mApproxPos = new double[] { 0.0, 0.0, 0.0 };
+
+    // --- NEW: Helper Class for High Precision Time ---
+    private static class RinexTime {
+        int year, month, day, hour, min;
+        double sec; // Keep high precision seconds
+
+        RinexTime(int year, int month, int day, int hour, int min, double sec) {
+            this.year = year;
+            this.month = month;
+            this.day = day;
+            this.hour = hour;
+            this.min = min;
+            this.sec = sec;
+        }
+
+        long toRoughMillis() {
+            // Only for approximate comparisons (like Galileo 1s check)
+            java.util.Calendar cal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"));
+            cal.set(year, month - 1, day, hour, min, (int) sec);
+            return cal.getTimeInMillis();
+        }
+    }
 
     public RinexLogger(Context context) {
         mContext = context;
@@ -142,7 +162,8 @@ public class RinexLogger {
     }
 
     public void stopLog() {
-        if (!mIsLogging) return;
+        if (!mIsLogging)
+            return;
         mIsLogging = false;
 
         try {
@@ -150,7 +171,6 @@ public class RinexLogger {
                 mBodyWriter.close();
             }
 
-            // Write Header + Body
             if (mRinexFile != null && mTempBodyFile != null && mTempBodyFile.exists()) {
                 BufferedWriter finalWriter = new BufferedWriter(new FileWriter(mRinexFile));
                 writeHeader(finalWriter);
@@ -179,7 +199,8 @@ public class RinexLogger {
     }
 
     public void processGnssMeasurements(GnssMeasurementsEvent event) {
-        if (!mIsLogging || mBodyWriter == null) return;
+        if (!mIsLogging || mBodyWriter == null)
+            return;
 
         GnssClock clock = event.getClock();
 
@@ -192,7 +213,8 @@ public class RinexLogger {
 
         if (!mFirstObsSet) {
             long timeNanos = clock.getTimeNanos();
-            mFirstObsTime = calculateRinexDate(timeNanos, mRefFullBiasNanos, mRefBiasNanos);
+            // Calculate with high precision
+            mFirstObsTime = calculateRinexTime(timeNanos, mRefFullBiasNanos, mRefBiasNanos);
             mFirstObsSet = true;
         }
 
@@ -201,8 +223,11 @@ public class RinexLogger {
 
     private void processEpoch(GnssClock clock, Iterable<GnssMeasurement> measurements) {
         long timeNanos = clock.getTimeNanos();
-        Date epochTime = calculateRinexDate(timeNanos, mRefFullBiasNanos, mRefBiasNanos);
-        long currentEpochMillis = epochTime.getTime();
+        // --- MODIFIED: High Precision Time Calculation ---
+        RinexTime epochTime = calculateRinexTime(timeNanos, mRefFullBiasNanos, mRefBiasNanos);
+        // -------------------------------------------------
+
+        long currentEpochMillis = epochTime.toRoughMillis();
 
         List<RnxSat> epochSats = new ArrayList<>();
 
@@ -217,22 +242,20 @@ public class RinexLogger {
         for (GnssMeasurement m : measurements) {
             int constType = m.getConstellationType();
             int sysId = getSystemId(constType);
-            if (sysId == -1) continue;
+            if (sysId == -1)
+                continue;
 
-            // --- MODIFIED: Smart Signal Identification using CodeType ---
             String rawCodeType = "";
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 if (m.hasCodeType()) {
                     rawCodeType = m.getCodeType();
                 }
             }
-            // Use the new smart logic
             String signalName = getSmartSignalCode(sysId, m.getCarrierFrequencyHz(), rawCodeType);
 
-            if (signalName == null || signalName.isEmpty()) continue;
-            // ------------------------------------------------------------
+            if (signalName == null || signalName.isEmpty())
+                continue;
 
-            // GLONASS Frequency Slot
             if (sysId == SYS_GLO) {
                 int svid = m.getSvid();
                 Integer k = calculateGlonassSlot(m.getCarrierFrequencyHz());
@@ -242,19 +265,23 @@ public class RinexLogger {
             }
 
             int freqIndex = registerSignal(sysId, signalName);
-            if (freqIndex == -1) continue;
+            if (freqIndex == -1)
+                continue;
 
-            if (!isMeasurementValid(m, sysId, signalName)) continue;
+            if (!isMeasurementValid(m, sysId, signalName))
+                continue;
 
             double rawCarrierFreqHz = m.getCarrierFrequencyHz();
-            if (rawCarrierFreqHz == 0) continue;
+            if (rawCarrierFreqHz == 0)
+                continue;
 
-            // Use Nominal Frequency for Wavelength Calculation
             double nominalFreq = getNominalFrequency(sysId, rawCarrierFreqHz, m.getSvid());
             double wavl = CLIGHT / nominalFreq;
 
+            // Pseudorange calculation uses raw nanos, precision is preserved
             double prSeconds = calculatePseudorangeSeconds(clock, m, sysId, mRefFullBiasNanos, mRefBiasNanos);
-            if (prSeconds < 0 || prSeconds > 0.5) continue;
+            if (prSeconds < 0 || prSeconds > 0.5)
+                continue;
 
             double pseudoRange = prSeconds * CLIGHT;
             double accumulatedDeltaRange = m.getAccumulatedDeltaRangeMeters();
@@ -273,7 +300,6 @@ public class RinexLogger {
             sat.d[freqIndex] = doppler;
             sat.s[freqIndex] = cno;
 
-            // LLI Calculation
             sat.lli[freqIndex] = 0;
             if ((adrState & ADR_STATE_HALF_CYCLE_REPORTED) != 0 && (adrState & ADR_STATE_HALF_CYCLE_RESOLVED) == 0) {
                 sat.lli[freqIndex] |= LLI_HALFC;
@@ -283,7 +309,7 @@ public class RinexLogger {
             }
         }
 
-        // Apply Galileo 4ms correction
+        // Galileo 4ms correction
         if (checkGalileo4ms && !mPreviousEpochSats.isEmpty()) {
             double range4ms = 0.004 * CLIGHT;
             double threshold = 1500.0;
@@ -297,14 +323,16 @@ public class RinexLogger {
                             break;
                         }
                     }
-                    if (prevSat == null) continue;
+                    if (prevSat == null)
+                        continue;
 
                     for (int i = 0; i < MAX_FRQ; i++) {
                         double pCurr = sat.p[i];
                         double pPrev = prevSat.p[i];
 
                         if (pCurr != 0 && pPrev != 0) {
-                            if (Math.abs(pCurr - pPrev - range4ms) < threshold || Math.abs(pCurr - pPrev + range4ms) < threshold) {
+                            if (Math.abs(pCurr - pPrev - range4ms) < threshold
+                                    || Math.abs(pCurr - pPrev + range4ms) < threshold) {
                                 int sign = (pCurr - pPrev) < 0 ? -1 : 1;
                                 sat.p[i] = sat.p[i] - sign * range4ms;
                             }
@@ -325,79 +353,83 @@ public class RinexLogger {
         }
     }
 
-    // --- NEW: Smart Signal Logic ---
+    // --- MODIFIED: High Precision Time Calculator (No Data Objects) ---
+    private RinexTime calculateRinexTime(long timeNanos, long fullBiasNanos, double biasNanos) {
+        // 1. Calculate rough GPS time in millis for Calendar (Year/Month/Day)
+        long gpsTimeNanos = timeNanos - fullBiasNanos - (long) biasNanos;
+        long gpsTimeMillis = gpsTimeNanos / 1000000L;
+        long gpsEpochMillis = 315964800000L; // Jan 6 1980
+        long rinexTimeMillis = gpsEpochMillis + gpsTimeMillis;
+
+        // 2. Use Calendar for Date components
+        java.util.Calendar cal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"));
+        cal.setTimeInMillis(rinexTimeMillis);
+
+        int year = cal.get(java.util.Calendar.YEAR);
+        int month = cal.get(java.util.Calendar.MONTH) + 1;
+        int day = cal.get(java.util.Calendar.DAY_OF_MONTH);
+        int hour = cal.get(java.util.Calendar.HOUR_OF_DAY);
+        int min = cal.get(java.util.Calendar.MINUTE);
+
+        // 3. Calculate Precise Seconds manually from Nanos
+        // Get the seconds part from Calendar (integer)
+        int secondsInt = cal.get(java.util.Calendar.SECOND);
+        // Calculate the fractional part from the remaining nanos
+        // modulo 1,000,000,000 gives the nanosecond part of the second
+        long nanosPart = gpsTimeNanos % 1000000000L;
+        if (nanosPart < 0)
+            nanosPart += 1000000000L; // Handle negative modulo safety
+
+        // Combine: Integer Seconds + (Nanos / 1e9)
+        double preciseSeconds = secondsInt + (nanosPart / 1.0e9);
+
+        return new RinexTime(year, month, day, hour, min, preciseSeconds);
+    }
+    // ------------------------------------------------------------------
+
     private String getSmartSignalCode(int sys, double carrierFreqHz, String androidCodeType) {
-        // 1. Pre-process
         double freqMhz = Math.round(carrierFreqHz / 1e5) / 10.0;
         String rawCode = (androidCodeType == null) ? "" : androidCodeType;
-
-        // 2. Define Band ID and Default Attribute
         String bandId = "";
         String defaultAttr = "";
 
-        // --- BDS B1I (1561.098 MHz) -> Band 2 ---
         if (sys == SYS_BDS && Math.abs(freqMhz - 1561.1) < 1.0) {
             bandId = "2";
             defaultAttr = "I";
-        }
-        // --- Band 1: L1 / E1 / B1C / G1 ---
-        else if (Math.abs(freqMhz - 1575.4) < 1.0 || (sys == SYS_GLO && freqMhz > 1590 && freqMhz < 1615)) {
+        } else if (Math.abs(freqMhz - 1575.4) < 1.0 || (sys == SYS_GLO && freqMhz > 1590 && freqMhz < 1615)) {
             bandId = "1";
-            if (sys == SYS_BDS) defaultAttr = "P"; // B1C default Pilot
-            else defaultAttr = "C";                // GPS/GLO/GAL default C/A or Pilot
-        }
-        // --- Band 5: L5 / E5a / B2a / QZS-L5 ---
-        else if (Math.abs(freqMhz - 1176.4) < 1.0) {
+            defaultAttr = (sys == SYS_BDS) ? "P" : "C";
+        } else if (Math.abs(freqMhz - 1176.4) < 1.0) {
             bandId = "5";
-            if (sys == SYS_BDS) defaultAttr = "P"; // B2a default Pilot
-            else defaultAttr = "Q";                // GPS/GAL default Quadrature
-        }
-        // --- Band 2: L2 / G2 ---
-        else if (Math.abs(freqMhz - 1227.6) < 1.0 || (sys == SYS_GLO && freqMhz > 1230 && freqMhz < 1260)) {
+            defaultAttr = (sys == SYS_BDS) ? "P" : "Q";
+        } else if (Math.abs(freqMhz - 1227.6) < 1.0 || (sys == SYS_GLO && freqMhz > 1230 && freqMhz < 1260)) {
             bandId = "2";
             defaultAttr = "C";
-        }
-        // --- Band 7: E5b / B2b ---
-        else if (Math.abs(freqMhz - 1207.1) < 1.0) {
+        } else if (Math.abs(freqMhz - 1207.1) < 1.0) {
             bandId = "7";
-            if (sys == SYS_BDS) defaultAttr = "I";
-            else defaultAttr = "Q"; // GAL E5b default Q
-        }
-        // --- Band 6: B3I ---
-        else if (Math.abs(freqMhz - 1268.5) < 1.0) {
+            defaultAttr = (sys == SYS_BDS) ? "I" : "Q";
+        } else if (Math.abs(freqMhz - 1268.5) < 1.0) {
             bandId = "6";
             defaultAttr = "I";
         }
 
-        // 3. Assembly
-        if (bandId.isEmpty()) return null;
-
+        if (bandId.isEmpty())
+            return null;
         String finalAttr = rawCode.isEmpty() ? defaultAttr : rawCode;
 
-        // 4. Correction / Translation (Fix Inconsistencies)
-        // Fix BDS B2a: Android "Q" -> RINEX "P"
-        if (sys == SYS_BDS && "5".equals(bandId) && "Q".equals(finalAttr)) {
+        if (sys == SYS_BDS && "5".equals(bandId) && "Q".equals(finalAttr))
             finalAttr = "P";
-        }
-
-        // 5. Ignore 1L measurements
-        if ("1".equals(bandId) && "L".equals(finalAttr)) {
-            return null; // Return null to skip this measurement
-        }
+        if ("1".equals(bandId) && "L".equals(finalAttr))
+            return null;
 
         return bandId + finalAttr;
     }
 
-    // Calculate GLONASS Slot Number (k)
     private Integer calculateGlonassSlot(double freq) {
-        if (freq > 1.59e9) {
-            double k = (freq - 1602.0e6) / 0.5625e6;
-            return (int) Math.round(k);
-        }
-        if (freq > 1.23e9 && freq < 1.26e9) {
-            double k = (freq - 1246.0e6) / 0.4375e6;
-            return (int) Math.round(k);
-        }
+        if (freq > 1.59e9)
+            return (int) Math.round((freq - 1602.0e6) / 0.5625e6);
+        if (freq > 1.23e9 && freq < 1.26e9)
+            return (int) Math.round((freq - 1246.0e6) / 0.4375e6);
         return null;
     }
 
@@ -405,100 +437,136 @@ public class RinexLogger {
         if (sysId == SYS_GLO) {
             Integer k = mGlonassFreqMap.get(svid);
             if (k != null) {
-                // Reconstruct exact FDMA frequency
-                if (rawFreq > 1.5e9) return 1602.0e6 + k * 0.5625e6;
-                else return 1246.0e6 + k * 0.4375e6;
+                if (rawFreq > 1.5e9)
+                    return 1602.0e6 + k * 0.5625e6;
+                else
+                    return 1246.0e6 + k * 0.4375e6;
             }
             return rawFreq;
         } else if (sysId == SYS_BDS) {
-            if (Math.abs(rawFreq - 1561.098e6) < 1.0e6) {
+            if (Math.abs(rawFreq - 1561.098e6) < 1.0e6)
                 return 1561.098e6;
-            }
         }
-        // For CDMA systems (GPS, GAL, QZSS, BDS, others), round to nearest 1kHz
         return Math.round(rawFreq / 1000.0) * 1000.0;
     }
 
-    private double calculatePseudorangeSeconds(GnssClock clock, GnssMeasurement m, int sysId, long refFullBiasNanos, double refBiasNanos) {
+    /**
+     * Modified to use integer arithmetic (long) for the subtraction of Rx and Tx time
+     * to prevent floating point precision loss, matching the logic in the Python script.
+     */
+    private double calculatePseudorangeSeconds(GnssClock clock, GnssMeasurement m, int sysId, long refFullBiasNanos,
+                                               double refBiasNanos) {
+
         long timeNanos = clock.getTimeNanos();
         double timeOffsetNanos = m.getTimeOffsetNanos();
+
+        // 1. Calculate Rx Time in Nanoseconds (Integer)
+        // Keep in long to preserve precision
+        long gpsTimeNanos = timeNanos - refFullBiasNanos + (long) timeOffsetNanos;
+
+        // 2. Get Tx Time in Nanoseconds (Integer)
+        // Do not multiply by 1e-9 here
+        long tTxNanos = m.getReceivedSvTimeNanos();
+
         long weekNanos = 604800L * 1000000000L;
         long dayNanos = 86400L * 1000000000L;
-        double tTxSeconds = m.getReceivedSvTimeNanos() * 1e-9;
-        double tRxSecondsMod = 0;
 
-        long gpsTimeNanos = timeNanos - refFullBiasNanos + (long)timeOffsetNanos;
+        long tRxModNanos = 0;
 
+        // 3. Align Rx Time to the same domain as Tx (TOW or TOD) using modulo
         if (sysId == SYS_GPS || sysId == SYS_GAL || sysId == SYS_QZS || sysId == SYS_BDS) {
             long timeOfWeekNanos = gpsTimeNanos % weekNanos;
             if (sysId == SYS_BDS) {
+                // BDS offset 14s
                 timeOfWeekNanos = (gpsTimeNanos - 14000000000L) % weekNanos;
             }
-            tRxSecondsMod = (timeOfWeekNanos - refBiasNanos) * 1e-9;
+            tRxModNanos = timeOfWeekNanos;
         } else if (sysId == SYS_GLO) {
             long timeOfDayNanos = gpsTimeNanos % dayNanos;
+            // GLONASS offset: UTC+3h - LeapSecond
             long gloOffsetNanos = (3 * 3600 - LEAP_SECOND) * 1000000000L;
-            tRxSecondsMod = (timeOfDayNanos + gloOffsetNanos - refBiasNanos) * 1e-9;
+            tRxModNanos = timeOfDayNanos + gloOffsetNanos;
         }
 
-        double pr = tRxSecondsMod - tTxSeconds;
+        // 4. Calculate Flight Time in Nanoseconds (Rx - Tx)
+        // Crucial Step: This subtraction happens in 'long', preserving sub-nanosecond precision
+        // relative to the bias.
+        long flightTimeNanos = tRxModNanos - tTxNanos;
+
+        // 5. Handle Rollovers (Week/Day crossovers) on the difference
+        // Thresholds in nanoseconds
+        long halfWeekNanos = 302400L * 1000000000L;
+        long halfDayNanos = 43200L * 1000000000L;
 
         if (sysId != SYS_GLO) {
-            if (pr > 302400.0) pr -= 604800.0;
-            else if (pr < -302400.0) pr += 604800.0;
+            if (flightTimeNanos > halfWeekNanos) {
+                flightTimeNanos -= weekNanos;
+            } else if (flightTimeNanos < -halfWeekNanos) {
+                flightTimeNanos += weekNanos;
+            }
+        } else {
+            // GLONASS Day Rollover
+            if (flightTimeNanos > halfDayNanos) {
+                flightTimeNanos -= dayNanos;
+            } else if (flightTimeNanos < -halfDayNanos) {
+                flightTimeNanos += dayNanos;
+            }
         }
 
-        if ((sysId == SYS_GPS || sysId == SYS_GAL || sysId == SYS_BDS || sysId == SYS_QZS) && pr > 604800) {
+        // 6. Final Calculation: Apply Bias and Convert to Seconds
+        // Now flightTimeNanos is small (approx 0.07s in nanos), so double precision is sufficient.
+        // Formula: (FlightTime - Bias) * 1e-9
+        double pr = (flightTimeNanos - refBiasNanos) * 1e-9;
+
+        // 7. Final Sanity Check (Legacy logic preserved for safety)
+        // If rollover correction above worked, this should be redundant but safe
+        if ((sysId == SYS_GPS || sysId == SYS_GAL || sysId == SYS_BDS || sysId == SYS_QZS) && pr > 604800)
             pr %= 604800.0;
-        }
-        if (sysId == SYS_GLO) {
-            if (pr > 43200.0) pr -= 86400.0;
-            else if (pr < -43200.0) pr += 86400.0;
-            if (pr > 86400) pr %= 86400.0;
-        }
+        if (sysId == SYS_GLO && pr > 86400)
+            pr %= 86400.0;
 
         return pr;
     }
 
     private boolean isMeasurementValid(GnssMeasurement m, int sysId, String signalName) {
         int state = m.getState();
+        if ((state & STATE_MSEC_AMBIGUOUS) != 0)
+            return false;
 
-        // 1. MSEC AMBIGUOUS
-        if ((state & STATE_MSEC_AMBIGUOUS) != 0) return false;
-
-        // 2. Time Decoded (TOW / TOD)
         boolean towDecoded = false;
-        if (sysId == SYS_GLO) {
+        if (sysId == SYS_GLO)
             towDecoded = (state & STATE_GLO_TOD_DECODED) != 0;
-        } else {
+        else
             towDecoded = (state & STATE_TOW_DECODED) != 0;
-        }
-        if (!towDecoded) return false;
+        if (!towDecoded)
+            return false;
 
-        // 3. Code Lock
         boolean codeLock = false;
         if (sysId == SYS_GAL && "1C".equals(signalName)) {
-            codeLock = (state & STATE_GAL_E1BC_CODE_LOCK) != 0 ||
-                    (state & STATE_GAL_E1C_2ND_CODE_LOCK) != 0;
+            codeLock = (state & STATE_GAL_E1BC_CODE_LOCK) != 0 || (state & STATE_GAL_E1C_2ND_CODE_LOCK) != 0;
         } else {
             codeLock = (state & STATE_CODE_LOCK) != 0;
         }
+        if (!codeLock)
+            return false;
 
-        if (!codeLock) return false;
-
-        // Uncertainty checks
-        if (m.getPseudorangeRateUncertaintyMetersPerSecond() > MAXPRRUNCMPS) return false;
-        if (m.getReceivedSvTimeUncertaintyNanos() > MAXTOWUNCNS) return false;
-        if (m.getAccumulatedDeltaRangeUncertaintyMeters() > MAXADRUNCNS) return false;
+        if (m.getPseudorangeRateUncertaintyMetersPerSecond() > MAXPRRUNCMPS)
+            return false;
+        if (m.getReceivedSvTimeUncertaintyNanos() > MAXTOWUNCNS)
+            return false;
+        if (m.getAccumulatedDeltaRangeUncertaintyMeters() > MAXADRUNCNS)
+            return false;
 
         return true;
     }
 
     private int registerSignal(int sys, String sig) {
         int sysIdx = getSystemIndex(sys);
-        if (sysIdx == -1) return -1;
+        if (sysIdx == -1)
+            return -1;
         for (int i = 0; i < mNumSignals[sysIdx]; i++) {
-            if (mSignals[sysIdx][i].equals(sig)) return i;
+            if (mSignals[sysIdx][i].equals(sig))
+                return i;
         }
         if (mNumSignals[sysIdx] < MAX_FRQ) {
             mSignals[sysIdx][mNumSignals[sysIdx]] = sig;
@@ -510,58 +578,50 @@ public class RinexLogger {
 
     private RnxSat findOrCreateSat(List<RnxSat> sats, int sys, int prn) {
         for (RnxSat s : sats) {
-            if (s.sys == sys && s.prn == prn) return s;
+            if (s.sys == sys && s.prn == prn)
+                return s;
         }
         RnxSat newSat = new RnxSat(sys, prn);
         sats.add(newSat);
         return newSat;
     }
 
-    private void writeEpoch(Date time, List<RnxSat> sats) throws IOException {
-        // 过滤所有观测值全为0的卫星
+    private void writeEpoch(RinexTime t, List<RnxSat> sats) throws IOException {
         List<RnxSat> validSats = new ArrayList<>();
         for (RnxSat sat : sats) {
             boolean allZero = true;
             for (int i = 0; i < MAX_FRQ; i++) {
-                if (Math.abs(sat.p[i]) > NEAR_ZERO || Math.abs(sat.l[i]) > NEAR_ZERO ||
-                        Math.abs(sat.d[i]) > NEAR_ZERO || Math.abs(sat.s[i]) > NEAR_ZERO) {
+                if (Math.abs(sat.p[i]) > NEAR_ZERO || Math.abs(sat.l[i]) > NEAR_ZERO) {
                     allZero = false;
                     break;
                 }
             }
-            if (!allZero) validSats.add(sat);
+            if (!allZero)
+                validSats.add(sat);
         }
 
-        // 排序
         Collections.sort(validSats, new Comparator<RnxSat>() {
             @Override
             public int compare(RnxSat o1, RnxSat o2) {
                 int p1 = getSystemPriority(o1.sys);
                 int p2 = getSystemPriority(o2.sys);
-                if (p1 != p2) return Integer.compare(p1, p2);
+                if (p1 != p2)
+                    return Integer.compare(p1, p2);
                 return Integer.compare(o1.prn, o2.prn);
             }
         });
 
-        java.util.Calendar cal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"));
-        cal.setTime(time);
-
+        // --- MODIFIED: Use Precise Seconds ---
         mBodyWriter.write(String.format(Locale.US, "> %04d %02d %02d %02d %02d %10.7f  0 %2d",
-                cal.get(java.util.Calendar.YEAR),
-                cal.get(java.util.Calendar.MONTH) + 1,
-                cal.get(java.util.Calendar.DAY_OF_MONTH),
-                cal.get(java.util.Calendar.HOUR_OF_DAY),
-                cal.get(java.util.Calendar.MINUTE),
-                (double)cal.get(java.util.Calendar.SECOND) + (cal.get(java.util.Calendar.MILLISECOND)/1000.0),
-                validSats.size()));
+                t.year, t.month, t.day, t.hour, t.min, t.sec, validSats.size()));
         mBodyWriter.newLine();
+        // -------------------------------------
 
         for (RnxSat sat : validSats) {
             char sysChar = getSystemChar(sat.sys);
             int prn = sat.prn;
-            if (sat.sys == SYS_QZS) {
+            if (sat.sys == SYS_QZS)
                 prn -= 192;
-            }
 
             mBodyWriter.write(String.format(Locale.US, "%c%02d", sysChar, prn));
 
@@ -569,10 +629,8 @@ public class RinexLogger {
             if (sysIdx != -1) {
                 for (int i = 0; i < mNumSignals[sysIdx]; i++) {
                     mBodyWriter.write(formatObs(sat.p[i]));
-
                     int lli = sat.lli[i] & (LLI_SLIP | LLI_HALFC | LLI_BOCTRK);
                     mBodyWriter.write(formatPhase(sat.l[i], lli));
-
                     mBodyWriter.write(formatObs(sat.d[i]));
                     mBodyWriter.write(formatObs(sat.s[i]));
                 }
@@ -581,40 +639,43 @@ public class RinexLogger {
         }
     }
 
-
     private String formatObs(double val) {
-        if (Math.abs(val) < NEAR_ZERO) return "                ";
+        if (Math.abs(val) < NEAR_ZERO)
+            return "                ";
         return String.format(Locale.US, "%14.3f  ", val);
     }
 
     private String formatPhase(double val, int lli) {
-        if (Math.abs(val) < NEAR_ZERO) return "                ";
+        if (Math.abs(val) < NEAR_ZERO)
+            return "                ";
         String lliStr = (lli == 0) ? " " : String.valueOf(lli);
         return String.format(Locale.US, "%14.3f%s ", val, lliStr);
     }
 
     private void writeHeader(BufferedWriter writer) throws IOException {
         writer.write("     3.05           OBSERVATION DATA    M: Mixed            RINEX VERSION / TYPE\n");
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US);
-        String dateStr = sdf.format(new Date());
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMdd HHmmss", Locale.US);
+        sdf.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+        String dateStr = sdf.format(new Date()) + " UTC";
         String pgm = "GeoLog";
         String runBy = Build.MANUFACTURER;
-        if (runBy.length() > 20) runBy = runBy.substring(0, 20);
+        if (runBy.length() > 20)
+            runBy = runBy.substring(0, 20);
 
         writer.write(String.format(Locale.US, "%-20s%-20s%-20sPGM / RUN BY / DATE   \n", pgm, runBy, dateStr));
         writer.write(String.format(Locale.US, "%-60sMARKER NAME         \n", "GeoLog"));
         writer.write(String.format(Locale.US, "%-60sMARKER NUMBER       \n", "Unknown"));
         writer.write(String.format(Locale.US, "%-60sMARKER TYPE         \n", "Unknown"));
         writer.write(String.format(Locale.US, "%-20s%-40sOBSERVER / AGENCY   \n", "SWJTU", "SWJTU"));
-        writer.write(String.format(Locale.US, "%-20s%-40sREC # / TYPE / VERS \n", "Unknown", Build.MANUFACTURER + " " + Build.MODEL + " " + Build.VERSION.RELEASE));
+        writer.write(String.format(Locale.US, "%-20s%-40sREC # / TYPE / VERS \n", "Unknown",
+                Build.MANUFACTURER + " " + Build.MODEL + " " + Build.VERSION.RELEASE));
         writer.write(String.format(Locale.US, "%-20s%-40sANT # / TYPE        \n", "unknown", "unknown"));
-        writer.write(String.format(Locale.US, "%14.4f%14.4f%14.4f                  APPROX POSITION XYZ \n", mApproxPos[0], mApproxPos[1], mApproxPos[2]));
+        writer.write(String.format(Locale.US, "%14.4f%14.4f%14.4f                  APPROX POSITION XYZ \n",
+                mApproxPos[0], mApproxPos[1], mApproxPos[2]));
         writer.write("        0.0000        0.0000        0.0000                  ANTENNA: DELTA H/E/N\n");
 
-        // --- MODIFIED: Simplified Header Generation ---
-        // Since getSmartSignalCode() returns standard codes (e.g. "1C", "5P"),
-        char[] sysChars = {'G', 'R', 'E', 'C', 'J'};
-        int[] sysIds = {SYS_GPS, SYS_GLO, SYS_GAL, SYS_BDS, SYS_QZS};
+        char[] sysChars = { 'G', 'R', 'E', 'C', 'J' };
+        int[] sysIds = { SYS_GPS, SYS_GLO, SYS_GAL, SYS_BDS, SYS_QZS };
 
         for (int k = 0; k < 5; k++) {
             int sys = sysIds[k];
@@ -622,39 +683,41 @@ public class RinexLogger {
             if (mNumSignals[idx] > 0) {
                 List<String> codes = new ArrayList<>();
                 for (int i = 0; i < mNumSignals[idx]; i++) {
-                    String suf = mSignals[idx][i]; // e.g. "1C", "5P"
-                    codes.add("C"+suf); codes.add("L"+suf); codes.add("D"+suf); codes.add("S"+suf);
+                    String suf = mSignals[idx][i];
+                    codes.add("C" + suf);
+                    codes.add("L" + suf);
+                    codes.add("D" + suf);
+                    codes.add("S" + suf);
                 }
 
                 int nObs = codes.size();
                 List<String> firstBatch = codes.subList(0, Math.min(codes.size(), 13));
                 StringBuilder sb = new StringBuilder();
-                for(String c : firstBatch) sb.append(String.format("%-4s", c));
+                for (String c : firstBatch)
+                    sb.append(String.format("%-4s", c));
 
-                writer.write(String.format(Locale.US, "%c  %3d %-52s SYS / # / OBS TYPES \n", sysChars[k], nObs, sb.toString()));
+                writer.write(String.format(Locale.US, "%c  %3d %-52s SYS / # / OBS TYPES \n", sysChars[k], nObs,
+                        sb.toString()));
 
                 for (int i = 13; i < codes.size(); i += 13) {
                     List<String> batch = codes.subList(i, Math.min(codes.size(), i + 13));
                     sb = new StringBuilder();
-                    for(String c : batch) sb.append(String.format("%-4s", c));
-                    writer.write(String.format(Locale.US, "      %-52s SYS / # / OBS TYPES \n", sb.toString()));
+                    for (String c : batch)
+                        sb.append(String.format("%-4s", c));
+                    writer.write(String.format(Locale.US, "       %-52s SYS / # / OBS TYPES \n", sb.toString()));
                 }
             }
         }
-        // -----------------------------------------------------
 
         if (!mGlonassFreqMap.isEmpty()) {
             Map<Integer, Integer> sortedSlots = new TreeMap<>(mGlonassFreqMap);
             int count = 0;
             int numGlo = sortedSlots.size();
-
             StringBuilder sb = new StringBuilder();
             sb.append(String.format(Locale.US, "%3d ", numGlo));
-
             for (Map.Entry<Integer, Integer> entry : sortedSlots.entrySet()) {
                 sb.append(String.format(Locale.US, "R%02d %2d ", entry.getKey(), entry.getValue()));
                 count++;
-
                 if (count == 8) {
                     writer.write(String.format(Locale.US, "%-60sGLONASS SLOT / FRQ #\n", sb.toString()));
                     sb = new StringBuilder("    ");
@@ -667,16 +730,12 @@ public class RinexLogger {
         }
 
         if (mFirstObsTime != null) {
-            java.util.Calendar cal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"));
-            cal.setTime(mFirstObsTime);
-            writer.write(String.format(Locale.US, "  %04d    %02d    %02d    %02d    %02d   %10.7f     GPS         TIME OF FIRST OBS\n",
-                    cal.get(java.util.Calendar.YEAR),
-                    cal.get(java.util.Calendar.MONTH) + 1,
-                    cal.get(java.util.Calendar.DAY_OF_MONTH),
-                    cal.get(java.util.Calendar.HOUR_OF_DAY),
-                    cal.get(java.util.Calendar.MINUTE),
-                    (double)cal.get(java.util.Calendar.SECOND) + (cal.get(java.util.Calendar.MILLISECOND)/1000.0)
-            ));
+            // --- MODIFIED: Use Precise Time for Header ---
+            writer.write(String.format(Locale.US,
+                    "  %04d    %02d    %02d    %02d    %02d   %10.7f     GPS         TIME OF FIRST OBS\n",
+                    mFirstObsTime.year, mFirstObsTime.month, mFirstObsTime.day,
+                    mFirstObsTime.hour, mFirstObsTime.min, mFirstObsTime.sec));
+            // ---------------------------------------------
         }
 
         writer.write("                                                            END OF HEADER       \n");
@@ -684,47 +743,59 @@ public class RinexLogger {
 
     private int getSystemId(int constType) {
         switch (constType) {
-            case GnssStatus.CONSTELLATION_GPS: return SYS_GPS;
-            case GnssStatus.CONSTELLATION_GLONASS: return SYS_GLO;
-            case GnssStatus.CONSTELLATION_BEIDOU: return SYS_BDS;
-            case GnssStatus.CONSTELLATION_GALILEO: return SYS_GAL;
-            case GnssStatus.CONSTELLATION_QZSS: return SYS_QZS;
-            default: return -1;
+            case GnssStatus.CONSTELLATION_GPS:
+                return SYS_GPS;
+            case GnssStatus.CONSTELLATION_GLONASS:
+                return SYS_GLO;
+            case GnssStatus.CONSTELLATION_BEIDOU:
+                return SYS_BDS;
+            case GnssStatus.CONSTELLATION_GALILEO:
+                return SYS_GAL;
+            case GnssStatus.CONSTELLATION_QZSS:
+                return SYS_QZS;
+            default:
+                return -1;
         }
     }
 
     private int getSystemIndex(int sys) {
-        if (sys == SYS_GPS) return 0;
-        if (sys == SYS_GLO) return 1;
-        if (sys == SYS_GAL) return 2;
-        if (sys == SYS_BDS) return 3;
-        if (sys == SYS_QZS) return 4;
+        if (sys == SYS_GPS)
+            return 0;
+        if (sys == SYS_GLO)
+            return 1;
+        if (sys == SYS_GAL)
+            return 2;
+        if (sys == SYS_BDS)
+            return 3;
+        if (sys == SYS_QZS)
+            return 4;
         return -1;
     }
 
     private char getSystemChar(int sys) {
-        if (sys == SYS_GPS) return 'G';
-        if (sys == SYS_GLO) return 'R';
-        if (sys == SYS_GAL) return 'E';
-        if (sys == SYS_BDS) return 'C';
-        if (sys == SYS_QZS) return 'J';
+        if (sys == SYS_GPS)
+            return 'G';
+        if (sys == SYS_GLO)
+            return 'R';
+        if (sys == SYS_GAL)
+            return 'E';
+        if (sys == SYS_BDS)
+            return 'C';
+        if (sys == SYS_QZS)
+            return 'J';
         return ' ';
     }
 
     private int getSystemPriority(int sys) {
-        if (sys == SYS_GPS) return 1;
-        if (sys == SYS_GLO) return 2;
-        if (sys == SYS_GAL) return 3;
-        if (sys == SYS_BDS) return 4;
+        if (sys == SYS_GPS)
+            return 1;
+        if (sys == SYS_GLO)
+            return 2;
+        if (sys == SYS_GAL)
+            return 3;
+        if (sys == SYS_BDS)
+            return 4;
         return 5;
-    }
-
-    private Date calculateRinexDate(long timeNanos, long fullBiasNanos, double biasNanos) {
-        long gpsTimeNanos = timeNanos - fullBiasNanos - (long)biasNanos;
-        long gpsTimeMillis = gpsTimeNanos / 1000000L;
-        long gpsEpochMillis = 315964800000L; // Jan 6 1980 in Java time
-        long rinexTimeMillis = gpsEpochMillis + gpsTimeMillis;
-        return new Date(rinexTimeMillis);
     }
 
     private double[] latLonHToXyz(double lat, double lon, double alt) {
@@ -737,7 +808,7 @@ public class RinexLogger {
         double x = (N + alt) * Math.cos(radLat) * Math.cos(radLon);
         double y = (N + alt) * Math.cos(radLat) * Math.sin(radLon);
         double z = (N * (1 - eSq) + alt) * Math.sin(radLat);
-        return new double[]{x, y, z};
+        return new double[] { x, y, z };
     }
 
     private static class RnxSat {
@@ -759,4 +830,3 @@ public class RinexLogger {
         return mRinexFile;
     }
 }
-
