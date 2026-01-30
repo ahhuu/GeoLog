@@ -499,34 +499,8 @@ public class FileLogger implements MeasurementListener {
       codeType = measurement.getCodeType();
     }
 
-    String isFullTrackingStr;
-
-    long state = measurement.getState();
-
-// 1. 码跟踪
-    boolean codeLock =
-            (state & GnssMeasurement.STATE_CODE_LOCK) != 0;
-
-// 2. 有明确 GNSS 时间（按系统区分）
-    boolean timeDecoded =
-            (state & GnssMeasurement.STATE_TOW_DECODED) != 0
-                    || (state & GnssMeasurement.STATE_GLO_STRING_SYNC) != 0
-                    || (state & GnssMeasurement.STATE_GLO_TOD_DECODED) != 0;
-
-// 3. 载波是否可用
-    boolean carrierUsable =
-            measurement.hasCarrierPhase()
-                    && (measurement.getAccumulatedDeltaRangeState()
-                    & GnssMeasurement.ADR_STATE_VALID) != 0;
-
-// === 最终 FullTracking ===
-    boolean isFullTracking =
-            codeLock
-                    && timeDecoded
-                    && carrierUsable;
-
-    isFullTrackingStr = String.valueOf(isFullTracking);
-
+    // IsFullTracking 默认设置为 1
+    String isFullTrackingStr = "1";
 
 
     String clockStream =
@@ -582,7 +556,7 @@ public class FileLogger implements MeasurementListener {
                     satelliteInterSignalBiasUncertaintyNanos,
                     codeType,
                     chipsetElapsedRealtimeNanos,
-                    isFullTracking,
+                    isFullTrackingStr,
                     "", "", "", // SvPositionEcef
                     "", "", "", // SvVelocityEcef
                     "", "",     // SvClock
