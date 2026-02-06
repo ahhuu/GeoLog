@@ -66,9 +66,9 @@ public class RinexLogger {
     private static final int LLI_BOCTRK = 0x04;
 
     // Thresholds
-    private static final double MAXPRRUNCMPS = 100.0;
+    private static final double MAXPRRUNCMPS = 10.0;
     private static final double MAXTOWUNCNS = 500.0;
-    private static final double MAXADRUNCNS = 10.0;
+    private static final double MAXADRUNCNS = 1.0;
 
     private final Context mContext;
     private File mRinexFile;
