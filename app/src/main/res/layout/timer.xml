@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:orientation="vertical"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:padding="24dp"
+    android:background="@color/surface_hud">
 
     <!-- Center landmark -->
     <RelativeLayout
@@ -15,13 +16,16 @@
             android:id="@+id/minutes_picker"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_centerVertical="true"/>
+            android:layout_centerVertical="true"
+            android:theme="@style/Theme.AppCompat.Light"/>
         <TextView
             android:id="@+id/minutes_text"
             android:text="@string/timer_minutes"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_centerHorizontal="true"
+            android:textColor="@color/on_surface_hud"
+            android:textSize="12sp"
             android:layout_below="@id/minutes_picker"/>
 
     </RelativeLayout>
@@ -30,18 +34,22 @@
         android:id="@+id/hours_container"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_toLeftOf="@id/minutes_container">
+        android:layout_toLeftOf="@id/minutes_container"
+        android:layout_marginEnd="16dp">
         <NumberPicker
             android:id="@+id/hours_picker"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_centerVertical="true"/>
+            android:layout_centerVertical="true"
+            android:theme="@style/Theme.AppCompat.Light"/>
         <TextView
             android:id="@+id/hours_text"
             android:text="@string/timer_hours"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_centerHorizontal="true"
+            android:textColor="@color/on_surface_hud"
+            android:textSize="12sp"
             android:layout_below="@id/hours_picker"/>
 
     </RelativeLayout>
@@ -50,18 +58,22 @@
         android:id="@+id/seconds_container"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_toRightOf="@+id/minutes_container">
+        android:layout_toRightOf="@+id/minutes_container"
+        android:layout_marginStart="16dp">
         <NumberPicker
             android:id="@+id/seconds_picker"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_centerVertical="true"/>
+            android:layout_centerVertical="true"
+            android:theme="@style/Theme.AppCompat.Light"/>
         <TextView
             android:id="@+id/seconds_text"
             android:text="@string/timer_seconds"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_centerHorizontal="true"
+            android:textColor="@color/on_surface_hud"
+            android:textSize="12sp"
             android:layout_below="@+id/seconds_picker"/>
 
     </RelativeLayout>

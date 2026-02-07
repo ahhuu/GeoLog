@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical" >
@@ -7,40 +8,70 @@
     <LinearLayout
         android:orientation="horizontal"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content">
+        android:layout_height="wrap_content"
+        android:background="@color/surface_hud"
+        android:padding="4dp">
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/start_log"
-            android:text="\u2770 Start"
+            style="@style/Widget.Material3.Button.TextButton"
             android:layout_width="0dp"
             android:layout_weight="1"
-            android:layout_height="wrap_content" />
-        <Button
+            android:layout_height="wrap_content"
+            android:text="START"
+            android:textColor="@color/primary"
+            app:icon="@android:drawable/ic_media_play"
+            app:iconTint="@color/primary" />
+
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/clear_log"
-            android:text="Clear"
+            style="@style/Widget.Material3.Button.TextButton"
             android:layout_width="0dp"
             android:layout_weight="1"
-            android:layout_height="wrap_content" />
-        <Button
+            android:layout_height="wrap_content"
+            android:text="CLEAR"
+            android:textColor="@color/status_poor"
+            app:icon="@android:drawable/ic_menu_delete"
+            app:iconTint="@color/status_poor" />
+
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/end_log"
-            android:text="End \u2771"
+            style="@style/Widget.Material3.Button.TextButton"
             android:layout_width="0dp"
             android:layout_weight="1"
-            android:layout_height="wrap_content" />
+            android:layout_height="wrap_content"
+            android:text="STOP"
+            android:textColor="@color/status_fair"
+            app:icon="@android:drawable/ic_media_pause"
+            app:iconTint="@color/status_fair" />
 
     </LinearLayout>
 
-    <ScrollView
-        android:id="@+id/log_scroll"
+    <com.google.android.material.card.MaterialCardView
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1">
+        android:layout_weight="1"
+        android:layout_margin="12dp"
+        app:cardBackgroundColor="@color/surface_hud"
+        app:cardCornerRadius="8dp"
+        app:strokeWidth="1dp"
+        app:strokeColor="@color/stroke_hud">
 
-        <TextView
-            android:id="@+id/log_view"
+        <ScrollView
+            android:id="@+id/log_scroll"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
+            android:layout_height="match_parent"
+            android:padding="8dp">
 
-    </ScrollView>
+            <TextView
+                android:id="@+id/log_view"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:fontFamily="monospace"
+                android:textColor="@color/on_surface_hud"
+                android:textSize="12sp" />
+
+        </ScrollView>
+    </com.google.android.material.card.MaterialCardView>
 
 </LinearLayout>

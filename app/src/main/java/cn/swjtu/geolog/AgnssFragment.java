@@ -31,6 +31,7 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import com.google.android.material.button.MaterialButton;
 import androidx.fragment.app.Fragment;
 
 /** The UI fragment that hosts a logging view. */
@@ -63,7 +64,7 @@ public class AgnssFragment extends Fragment {
       mUiLogger.setUiFragmentComponent(mUiComponent);
     }
 
-    Button clearAgps = (Button) newView.findViewById(R.id.clearAgps);
+    MaterialButton clearAgps = newView.findViewById(R.id.clearAgps);
     clearAgps.setOnClickListener(
         new OnClickListener() {
           @Override
@@ -76,7 +77,7 @@ public class AgnssFragment extends Fragment {
           }
         });
 
-    Button fetchExtraData = (Button) newView.findViewById(R.id.fetchExtraData);
+    MaterialButton fetchExtraData = newView.findViewById(R.id.fetchExtraData);
     fetchExtraData.setOnClickListener(
         new OnClickListener() {
           @Override
@@ -89,7 +90,7 @@ public class AgnssFragment extends Fragment {
           }
         });
 
-    Button fetchTimeData = (Button) newView.findViewById(R.id.fetchTimeData);
+    MaterialButton fetchTimeData = newView.findViewById(R.id.fetchTimeData);
     fetchTimeData.setOnClickListener(
         new OnClickListener() {
           @Override
@@ -102,7 +103,7 @@ public class AgnssFragment extends Fragment {
           }
         });
 
-    Button requestSingleNlp = (Button) newView.findViewById(R.id.requestSingleNlp);
+    MaterialButton requestSingleNlp = newView.findViewById(R.id.requestSingleNlp);
     requestSingleNlp.setOnClickListener(
         new OnClickListener() {
           @Override
@@ -113,7 +114,7 @@ public class AgnssFragment extends Fragment {
           }
         });
 
-    Button requestSingleGps = (Button) newView.findViewById(R.id.requestSingleGps);
+    MaterialButton requestSingleGps = newView.findViewById(R.id.requestSingleGps);
     requestSingleGps.setOnClickListener(
         new OnClickListener() {
           @Override
@@ -123,7 +124,7 @@ public class AgnssFragment extends Fragment {
             Log.i(MeasurementProvider.TAG + TAG, "Single GPS Location Requested");
           }
         });
-    Button clear = (Button) newView.findViewById(R.id.clear_log);
+    MaterialButton clear = newView.findViewById(R.id.clear_log);
     clear.setOnClickListener(
         new OnClickListener() {
           @Override
@@ -134,6 +135,7 @@ public class AgnssFragment extends Fragment {
 
     return newView;
   }
+
   /** A facade for Agnss UI related operations. */
   public class AgnssUIFragmentComponent {
 

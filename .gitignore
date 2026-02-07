@@ -1,10 +1,52 @@
-*.iml
-.gradle
-/local.properties
-/.idea/
-.DS_Store
-/build
-/captures
+# Java and Android Artifacts
+*.class
+*.dex
+*.apk
+*.ap_
+*.aab
+bin/
+gen/
+out/
+build/
+captures/
 .externalNativeBuild
 .cxx
 local.properties
+
+# Android Studio and IntelliJ
+.idea/
+*.iml
+*.iws
+*.ipr
+atlassian-ide-plugin.xml
+.navigation/
+
+# Gradle
+.gradle/
+build/
+gradle-app.setting
+!gradle-wrapper.jar
+
+# Log files
+*.log
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Icon?
+
+# Temporary files
+*.swp
+*~
+*.bak
+*.tmp
+
+# Documentation and Node dependencies
+docs/
+node_modules/
+.history/

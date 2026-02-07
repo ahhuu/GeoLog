@@ -31,6 +31,7 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import com.google.android.material.button.MaterialButton;
 import androidx.fragment.app.Fragment;
 
 /** The UI fragment that hosts a logging view. */
@@ -54,13 +55,12 @@ public class ResultFragment extends Fragment {
     mLogView = (TextView) newView.findViewById(R.id.log_view);
     mScrollView = (ScrollView) newView.findViewById(R.id.log_scroll);
 
-    RealTimePositionVelocityCalculator currentPositionVelocityCalculator =
-        mPositionVelocityCalculator;
+    RealTimePositionVelocityCalculator currentPositionVelocityCalculator = mPositionVelocityCalculator;
     if (currentPositionVelocityCalculator != null) {
       currentPositionVelocityCalculator.setUiResultComponent(mUiComponent);
     }
 
-    Button start = (Button) newView.findViewById(R.id.start_log);
+    MaterialButton start = newView.findViewById(R.id.start_log);
     start.setOnClickListener(
         new OnClickListener() {
           @Override
@@ -69,7 +69,7 @@ public class ResultFragment extends Fragment {
           }
         });
 
-    Button end = (Button) newView.findViewById(R.id.end_log);
+    MaterialButton end = newView.findViewById(R.id.end_log);
     end.setOnClickListener(
         new OnClickListener() {
           @Override
@@ -78,7 +78,7 @@ public class ResultFragment extends Fragment {
           }
         });
 
-    Button clear = (Button) newView.findViewById(R.id.clear_log);
+    MaterialButton clear = newView.findViewById(R.id.clear_log);
     clear.setOnClickListener(
         new OnClickListener() {
           @Override
@@ -117,15 +117,14 @@ public class ResultFragment extends Fragment {
             @Override
             public void run() {
               mLogView.append(builder);
-              SharedPreferences sharedPreferences =
-                  PreferenceManager.getDefaultSharedPreferences(getActivity());
+              SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
               Editable editable = mLogView.getEditableText();
               int length = editable.length();
               if (length > MAX_LENGTH) {
                 editable.delete(0, length - LOWER_THRESHOLD);
               }
               if (sharedPreferences.getBoolean(
-                  SettingsFragment.PREFERENCE_KEY_AUTO_SCROLL, false /*default return value*/)) {
+                  SettingsFragment.PREFERENCE_KEY_AUTO_SCROLL, false /* default return value */)) {
                 mScrollView.post(
                     new Runnable() {
                       @Override

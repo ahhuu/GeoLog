@@ -65,15 +65,16 @@ import java.util.List;
 import java.util.Locale;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.WindowManager;
 
 /** The activity for the application. */
 public class MainActivity extends AppCompatActivity
-        implements OnConnectionFailedListener, ConnectionCallbacks, GroundTruthModeSwitcher {
+    implements OnConnectionFailedListener, ConnectionCallbacks, GroundTruthModeSwitcher {
   private static final int LOCATION_REQUEST_ID = 1;
   private static final String[] REQUIRED_PERMISSIONS = {
-          Manifest.permission.ACCESS_FINE_LOCATION,
-          Manifest.permission.ACCESS_COARSE_LOCATION,
-          Manifest.permission.ACTIVITY_RECOGNITION
+      Manifest.permission.ACCESS_FINE_LOCATION,
+      Manifest.permission.ACCESS_COARSE_LOCATION,
+      Manifest.permission.ACTIVITY_RECOGNITION
   };
   private static final int NUMBER_OF_FRAGMENTS = 6;
   private static final int FRAGMENT_INDEX_STATUS = 0;
@@ -85,21 +86,22 @@ public class MainActivity extends AppCompatActivity
   private static final String TAG = "MainActivity";
 
   private MeasurementProvider mMeasurementProvider;
+
   public MeasurementProvider getMeasurementProvider() {
-      return mMeasurementProvider;
+    return mMeasurementProvider;
   }
 
   private UiLogger mUiLogger;
   private RealTimePositionVelocityCalculator mRealTimePositionVelocityCalculator;
 
   public RealTimePositionVelocityCalculator getRealTimePositionVelocityCalculator() {
-      return mRealTimePositionVelocityCalculator;
+    return mRealTimePositionVelocityCalculator;
   }
 
   private FileLogger mFileLogger;
 
   public FileLogger getFileLogger() {
-      return mFileLogger;
+    return mFileLogger;
   }
 
   private AgnssUiLogger mAgnssUiLogger;
@@ -115,22 +117,44 @@ public class MainActivity extends AppCompatActivity
   }
 
   private boolean mAutoSwitchGroundTruthMode;
-  //广播接收器，用于接收活动检测结果的广播
-  private final ActivityDetectionBroadcastReceiver mBroadcastReceiver =
-          new ActivityDetectionBroadcastReceiver();
-  //服务连接对象，用于绑定和解绑服务
-  private ServiceConnection mConnection =
-          new ServiceConnection() {
-            @Override
-            public void onServiceConnected(ComponentName className, IBinder serviceBinder) {
-              // Empty
-            }
+  // 广播接收器，用于接收活动检测结果的广播
+  private final ActivityDetectionBroadcastReceiver mBroadcastReceiver = new ActivityDetectionBroadcastReceiver();
 
-            @Override
-            public void onServiceDisconnected(ComponentName className) {
-              // Empty
-            }
-          };
+  private final BroadcastReceiver mLoggingStateReceiver = new BroadcastReceiver() {
+    @Override
+    public void onReceive(Context context, Intent intent) {
+      if (intent == null || intent.getAction() == null)
+        return;
+
+      SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(MainActivity.this);
+      boolean autoDimEnabled = prefs.getBoolean("auto_dim_during_logging", false);
+
+      if (!autoDimEnabled)
+        return;
+
+      WindowManager.LayoutParams lp = getWindow().getAttributes();
+      if ("cn.swjtu.geolog.LOGGING_STARTED".equals(intent.getAction())) {
+        lp.screenBrightness = 0.01f; // Dim screen
+        getWindow().setAttributes(lp);
+      } else if ("cn.swjtu.geolog.LOGGING_STOPPED".equals(intent.getAction())) {
+        lp.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE; // Restore
+        getWindow().setAttributes(lp);
+      }
+    }
+  };
+
+  // 服务连接对象，用于绑定和解绑服务
+  private ServiceConnection mConnection = new ServiceConnection() {
+    @Override
+    public void onServiceConnected(ComponentName className, IBinder serviceBinder) {
+      // Empty
+    }
+
+    @Override
+    public void onServiceDisconnected(ComponentName className) {
+      // Empty
+    }
+  };
 
   // 在活动启动时，绑定 TimerService 服务，确保应用运行时服务可用
   @Override
@@ -139,24 +163,39 @@ public class MainActivity extends AppCompatActivity
     bindService(new Intent(this, TimerService.class), mConnection, Context.BIND_AUTO_CREATE);
   }
 
-  //在活动恢复时，注册广播接收器 mBroadcastReceiver，用于接收活动检测结果的广播
+  // 在活动恢复时，注册广播接收器 mBroadcastReceiver，用于接收活动检测结果的广播
   @Override
   protected void onResume() {
     super.onResume();
     LocalBroadcastManager.getInstance(this)
-            .registerReceiver(
-                    mBroadcastReceiver,
-                    new IntentFilter(DetectedActivitiesIntentReceiver.AR_RESULT_BROADCAST_ACTION));
+        .registerReceiver(
+            mBroadcastReceiver,
+            new IntentFilter(DetectedActivitiesIntentReceiver.AR_RESULT_BROADCAST_ACTION));
+
+    IntentFilter filter = new IntentFilter();
+    filter.addAction("cn.swjtu.geolog.LOGGING_STARTED");
+    filter.addAction("cn.swjtu.geolog.LOGGING_STOPPED");
+    ContextCompat.registerReceiver(this, mLoggingStateReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED);
   }
 
-  //在活动暂停时，取消注册广播接收器 mBroadcastReceiver
+  // 在活动暂停时，取消注册广播接收器 mBroadcastReceiver
   @Override
   protected void onPause() {
     LocalBroadcastManager.getInstance(this).unregisterReceiver(mBroadcastReceiver);
+    try {
+      unregisterReceiver(mLoggingStateReceiver);
+    } catch (Exception ignore) {
+    }
+
+    // Safety: Restore brightness when leaving activity
+    WindowManager.LayoutParams lp = getWindow().getAttributes();
+    lp.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
+    getWindow().setAttributes(lp);
+
     super.onPause();
   }
 
-  //在活动停止时，解绑之前绑定的服务
+  // 在活动停止时，解绑之前绑定的服务
   @Override
   protected void onStop() {
     super.onStop();
@@ -177,143 +216,90 @@ public class MainActivity extends AppCompatActivity
     editor.commit();
     super.onCreate(savedInstanceState);
 
-    WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
-
-    int actionBarColor = 0xFF212121;
-    getWindow().setStatusBarColor(actionBarColor);
-
-    WindowInsetsControllerCompat windowInsetsController = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
-    if (windowInsetsController != null) {
-      windowInsetsController.setAppearanceLightStatusBars(false);
-    }
-    
     setContentView(R.layout.activity_main);
 
-    if (getSupportActionBar() != null) {
-      getWindow().getDecorView().post(() -> {
-        getWindow().setStatusBarColor(actionBarColor);
-      });
+    // 显式禁用沉浸式布局，防止内容冲到状态栏上面
+    WindowCompat.setDecorFitsSystemWindows(getWindow(), true);
+
+    // 设置状态栏背景色
+    getWindow().setStatusBarColor(0xFFF1F5F9); // background_hud (Light)
+
+    // 设置状态栏文字/图标为白色
+    WindowInsetsControllerCompat windowInsetsController = WindowCompat.getInsetsController(getWindow(),
+        getWindow().getDecorView());
+    if (windowInsetsController != null) {
+      windowInsetsController.setAppearanceLightStatusBars(true);
     }
 
-    View mainContentContainer = findViewById(R.id.main_content_container);
-    if (mainContentContainer != null) {
-      ViewCompat.setOnApplyWindowInsetsListener(mainContentContainer, (v, windowInsets) -> {
-        int systemBars = WindowInsetsCompat.Type.systemBars();
-        androidx.core.graphics.Insets insets = windowInsets.getInsets(systemBars);
-        int topInset = insets.top;
-        int bottomInset = insets.bottom;
-
-        int actionBarHeight = 0;
-        if (getSupportActionBar() != null) {
-          actionBarHeight = getSupportActionBar().getHeight();
-        }
-
-        int finalTopPadding = topInset + actionBarHeight;
-
-        v.setPadding(
-            v.getPaddingLeft(),
-            finalTopPadding,
-            v.getPaddingRight(),
-            bottomInset
-        );
-
-        return windowInsets;
-      });
-
-      mainContentContainer.post(() -> {
-        ViewCompat.requestApplyInsets(mainContentContainer);
-      });
-    }
-
-    View settingsContainer = findViewById(R.id.settings_container);
-    if (settingsContainer != null) {
-      ViewCompat.setOnApplyWindowInsetsListener(settingsContainer, (v, windowInsets) -> {
-        int systemBars = WindowInsetsCompat.Type.systemBars();
-        androidx.core.graphics.Insets insets = windowInsets.getInsets(systemBars);
-        int topInset = insets.top;
-        int bottomInset = insets.bottom;
-
-        int actionBarHeight = 0;
-        if (getSupportActionBar() != null) {
-          actionBarHeight = getSupportActionBar().getHeight();
-        }
-
-        int finalTopPadding = topInset + actionBarHeight;
-
-        v.setPadding(
-            v.getPaddingLeft(),
-            finalTopPadding,
-            v.getPaddingRight(),
-            bottomInset
-        );
-
-        return windowInsets;
-      });
-
-      settingsContainer.post(() -> {
-        ViewCompat.requestApplyInsets(settingsContainer);
-      });
-    }
-    
     buildGoogleApiClient();
     requestPermissionAndSetupFragments(this);
 
     // Setup Toolbar support/styling if needed, usually inherent in Theme.AppCompat
+
+    // Custom Settings Button
+    findViewById(R.id.btn_settings).setOnClickListener(v -> {
+      openSettings();
+    });
+  }
+
+  private void openSettings() {
+    FragmentManager fm = getSupportFragmentManager();
+    Fragment f = fm.findFragmentById(R.id.settings_container);
+
+    if (f != null) {
+      fm.popBackStack();
+    } else {
+      if (mSettingsFragment != null) {
+        fm.beginTransaction()
+            .setCustomAnimations(android.R.anim.fade_in, android.R.anim.fade_out, android.R.anim.fade_in,
+                android.R.anim.fade_out)
+            .replace(R.id.settings_container, mSettingsFragment)
+            .addToBackStack("settings")
+            .commit();
+        View settingsContainer = findViewById(R.id.settings_container);
+        if (settingsContainer != null) {
+          settingsContainer.post(() -> {
+            ViewCompat.requestApplyInsets(settingsContainer);
+          });
+        }
+      }
+    }
   }
 
   @Override
   public boolean onCreateOptionsMenu(Menu menu) {
-      getMenuInflater().inflate(R.menu.main_menu, menu);
-      return true;
+    getMenuInflater().inflate(R.menu.main_menu, menu);
+    return true;
   }
 
   @Override
   public boolean onOptionsItemSelected(MenuItem item) {
-      int id = item.getItemId();
-      if (id == R.id.action_settings) {
-          FragmentManager fm = getSupportFragmentManager();
-          Fragment f = fm.findFragmentById(R.id.settings_container);
-
-          if (f != null) {
-              fm.popBackStack();
-          } else {
-              if (mSettingsFragment != null) {
-                  fm.beginTransaction()
-                      .replace(R.id.settings_container, mSettingsFragment)
-                      .addToBackStack("settings")
-                      .commit();
-                  View settingsContainer = findViewById(R.id.settings_container);
-                  if (settingsContainer != null) {
-                    settingsContainer.post(() -> {
-                      ViewCompat.requestApplyInsets(settingsContainer);
-                    });
-                  }
-              }
-          }
-          return true;
-      }
-      return super.onOptionsItemSelected(item);
+    int id = item.getItemId();
+    if (id == R.id.action_settings) {
+      openSettings();
+      return true;
+    }
+    return super.onOptionsItemSelected(item);
   }
 
   protected PendingIntent createActivityDetectionPendingIntent() {
     Intent intent = new Intent(this, DetectedActivitiesIntentReceiver.class);
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
       return PendingIntent.getBroadcast(this, 0, intent,
-              PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE);
+          PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE);
     } else {
       return PendingIntent.getBroadcast(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
     }
   }
 
   private synchronized void buildGoogleApiClient() {
-    mGoogleApiClient =
-            new GoogleApiClient.Builder(this)
-                    .enableAutoManage(this, this)
-                    .addConnectionCallbacks(this)
-                    .addOnConnectionFailedListener(this)
-                    .addApi(ActivityRecognition.API)
-                    .addApi(LocationServices.API)
-                    .build();
+    mGoogleApiClient = new GoogleApiClient.Builder(this)
+        .enableAutoManage(this, this)
+        .addConnectionCallbacks(this)
+        .addOnConnectionFailedListener(this)
+        .addApi(ActivityRecognition.API)
+        .addApi(LocationServices.API)
+        .build();
   }
 
   @Override
@@ -330,28 +316,28 @@ public class MainActivity extends AppCompatActivity
     }
     try {
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACTIVITY_RECOGNITION)
-                == PackageManager.PERMISSION_GRANTED) {
+        if (ContextCompat.checkSelfPermission(this,
+            Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED) {
           ActivityRecognition.ActivityRecognitionApi.requestActivityUpdates(
-                  mGoogleApiClient, 0, createActivityDetectionPendingIntent());
+              mGoogleApiClient, 0, createActivityDetectionPendingIntent());
         } else {
           ActivityCompat.requestPermissions(
-                  this,
-                  new String[]{Manifest.permission.ACTIVITY_RECOGNITION},
-                  LOCATION_REQUEST_ID);
+              this,
+              new String[] { Manifest.permission.ACTIVITY_RECOGNITION },
+              LOCATION_REQUEST_ID);
         }
       } else {
         ActivityRecognition.ActivityRecognitionApi.requestActivityUpdates(
-                mGoogleApiClient, 0, createActivityDetectionPendingIntent());
+            mGoogleApiClient, 0, createActivityDetectionPendingIntent());
       }
     } catch (SecurityException e) {
       if (Log.isLoggable(TAG, Log.WARN)) {
         Log.w(TAG, "Activity updates denied, requesting permission", e);
       }
       ActivityCompat.requestPermissions(
-              this,
-              new String[] {Manifest.permission.ACTIVITY_RECOGNITION},
-              LOCATION_REQUEST_ID);
+          this,
+          new String[] { Manifest.permission.ACTIVITY_RECOGNITION },
+          LOCATION_REQUEST_ID);
     }
   }
 
@@ -363,7 +349,8 @@ public class MainActivity extends AppCompatActivity
   }
 
   /**
-   * A {@link FragmentStatePagerAdapter} that returns a fragment corresponding to one of the
+   * A {@link FragmentStatePagerAdapter} that returns a fragment corresponding to
+   * one of the
    * sections/tabs/pages.
    */
   public class ViewPagerAdapter extends FragmentStatePagerAdapter {
@@ -415,7 +402,7 @@ public class MainActivity extends AppCompatActivity
 
   @Override
   public void onRequestPermissionsResult(
-          int requestCode, String[] permissions, int[] grantResults) {
+      int requestCode, String[] permissions, int[] grantResults) {
     super.onRequestPermissionsResult(requestCode, permissions, grantResults);
     if (requestCode == LOCATION_REQUEST_ID) {
       boolean allGranted = true;
@@ -429,12 +416,12 @@ public class MainActivity extends AppCompatActivity
         setupFragments();
         // Check/Request Background Location if on Android 11+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-             if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_BACKGROUND_LOCATION)
-                     != PackageManager.PERMISSION_GRANTED) {
-                 ActivityCompat.requestPermissions(this,
-                         new String[]{Manifest.permission.ACCESS_BACKGROUND_LOCATION},
-                         LOCATION_REQUEST_ID + 1);
-             }
+          if (ContextCompat.checkSelfPermission(this,
+              Manifest.permission.ACCESS_BACKGROUND_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this,
+                new String[] { Manifest.permission.ACCESS_BACKGROUND_LOCATION },
+                LOCATION_REQUEST_ID + 1);
+          }
         }
       } else {
         if (ActivityCompat.shouldShowRequestPermissionRationale(this, REQUIRED_PERMISSIONS[0])) {
@@ -444,10 +431,10 @@ public class MainActivity extends AppCompatActivity
         }
       }
     } else if (requestCode == LOCATION_REQUEST_ID + 1) {
-        // Background location result
-        if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-            Toast.makeText(this, "后台定位权限已获取", Toast.LENGTH_SHORT).show();
-        }
+      // Background location result
+      if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+        Toast.makeText(this, "后台定位权限已获取", Toast.LENGTH_SHORT).show();
+      }
     }
   }
 
@@ -456,18 +443,17 @@ public class MainActivity extends AppCompatActivity
     mRealTimePositionVelocityCalculator = new RealTimePositionVelocityCalculator();
     mRealTimePositionVelocityCalculator.setMainActivity(this);
     mRealTimePositionVelocityCalculator.setResidualPlotMode(
-            RealTimePositionVelocityCalculator.RESIDUAL_MODE_DISABLED, null /* fixedGroundTruth */);
+        RealTimePositionVelocityCalculator.RESIDUAL_MODE_DISABLED, null /* fixedGroundTruth */);
 
     mFileLogger = new FileLogger(getApplicationContext());
     mAgnssUiLogger = new AgnssUiLogger();
-    mMeasurementProvider =
-            new MeasurementProvider(
-                    getApplicationContext(),
-                    mGoogleApiClient,
-                    mUiLogger,
-                    mFileLogger,
-                    mRealTimePositionVelocityCalculator,
-                    mAgnssUiLogger);
+    mMeasurementProvider = new MeasurementProvider(
+        getApplicationContext(),
+        mGoogleApiClient,
+        mUiLogger,
+        mFileLogger,
+        mRealTimePositionVelocityCalculator,
+        mAgnssUiLogger);
     mFragments = new Fragment[NUMBER_OF_FRAGMENTS];
 
     mSettingsFragment = new SettingsFragment();
@@ -512,11 +498,13 @@ public class MainActivity extends AppCompatActivity
     TabLayout tabLayout = findViewById(R.id.tab_layout);
     tabLayout.setTabsFromPagerAdapter(adapter);
 
-    // Set a listener via setOnTabSelectedListener(OnTabSelectedListener) to be notified when any
+    // Set a listener via setOnTabSelectedListener(OnTabSelectedListener) to be
+    // notified when any
     // tab's selection state has been changed.
     tabLayout.setOnTabSelectedListener(new TabLayout.ViewPagerOnTabSelectedListener(viewPager));
 
-    // Use a TabLayout.TabLayoutOnPageChangeListener to forward the scroll and selection changes to
+    // Use a TabLayout.TabLayoutOnPageChangeListener to forward the scroll and
+    // selection changes to
     // this layout
     viewPager.addOnPageChangeListener(new TabLayout.TabLayoutOnPageChangeListener(tabLayout));
   }
@@ -529,15 +517,15 @@ public class MainActivity extends AppCompatActivity
     }
     // Check MANAGE_EXTERNAL_STORAGE for Android 11+
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-        if (!Environment.isExternalStorageManager()) {
-            return false;
-        }
+      if (!Environment.isExternalStorageManager()) {
+        return false;
+      }
     } else {
-        // Check WRITE_EXTERNAL_STORAGE for old versions
-        if (ContextCompat.checkSelfPermission(activity, Manifest.permission.WRITE_EXTERNAL_STORAGE)
-            != PackageManager.PERMISSION_GRANTED) {
-            return false;
-        }
+      // Check WRITE_EXTERNAL_STORAGE for old versions
+      if (ContextCompat.checkSelfPermission(activity,
+          Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+        return false;
+      }
     }
 
     for (String p : REQUIRED_PERMISSIONS) {
@@ -553,14 +541,14 @@ public class MainActivity extends AppCompatActivity
     if (hasPermissions(activity)) {
       // Check Background Location for Android 10+ (separate check)
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-         if (ContextCompat.checkSelfPermission(activity, Manifest.permission.ACCESS_BACKGROUND_LOCATION)
-                 != PackageManager.PERMISSION_GRANTED) {
-             // On Android 11+, we must request this separately.
-             // We request it here to ensure we have it for background logging.
-             ActivityCompat.requestPermissions(activity,
-                     new String[]{Manifest.permission.ACCESS_BACKGROUND_LOCATION},
-                     LOCATION_REQUEST_ID + 1);
-         }
+        if (ContextCompat.checkSelfPermission(activity,
+            Manifest.permission.ACCESS_BACKGROUND_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+          // On Android 11+, we must request this separately.
+          // We request it here to ensure we have it for background logging.
+          ActivityCompat.requestPermissions(activity,
+              new String[] { Manifest.permission.ACCESS_BACKGROUND_LOCATION },
+              LOCATION_REQUEST_ID + 1);
+        }
       }
       setupFragments();
     } else {
@@ -569,30 +557,30 @@ public class MainActivity extends AppCompatActivity
 
       // Add WRITE_EXTERNAL_STORAGE for older Androids
       if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-          permissionsToRequest.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
+        permissionsToRequest.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
       }
 
       // On Android 10 (Q) we can request background location with others.
       // On Android 11+ (R) we CANNOT.
       if (Build.VERSION.SDK_INT == Build.VERSION_CODES.Q) {
-          permissionsToRequest.add(Manifest.permission.ACCESS_BACKGROUND_LOCATION);
+        permissionsToRequest.add(Manifest.permission.ACCESS_BACKGROUND_LOCATION);
       }
 
       ActivityCompat.requestPermissions(activity, permissionsToRequest.toArray(new String[0]), LOCATION_REQUEST_ID);
 
       // Request Manage External Storage separately if needed (for Android 11+)
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) {
-          try {
-              Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
-              intent.addCategory("android.intent.category.DEFAULT");
-              intent.setData(Uri.parse(String.format("package:%s", getApplicationContext().getPackageName())));
-              activity.startActivityForResult(intent, 2296);
-              Toast.makeText(activity, "请授予所有文件访问权限以保存日志", Toast.LENGTH_LONG).show();
-          } catch (Exception e) {
-              Intent intent = new Intent();
-              intent.setAction(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
-              activity.startActivityForResult(intent, 2296);
-          }
+        try {
+          Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+          intent.addCategory("android.intent.category.DEFAULT");
+          intent.setData(Uri.parse(String.format("package:%s", getApplicationContext().getPackageName())));
+          activity.startActivityForResult(intent, 2296);
+          Toast.makeText(activity, "请授予所有文件访问权限以保存日志", Toast.LENGTH_LONG).show();
+        } catch (Exception e) {
+          Intent intent = new Intent();
+          intent.setAction(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
+          activity.startActivityForResult(intent, 2296);
+        }
       }
     }
   }
@@ -603,16 +591,16 @@ public class MainActivity extends AppCompatActivity
     if (requestCode == 2296) {
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
         if (Environment.isExternalStorageManager()) {
-           boolean allGranted = true;
-           for (String p : REQUIRED_PERMISSIONS) {
-               if (ContextCompat.checkSelfPermission(this, p) != PackageManager.PERMISSION_GRANTED) {
-                   allGranted = false;
-                   break;
-               }
-           }
-           if (allGranted) {
-               setupFragments();
-           }
+          boolean allGranted = true;
+          for (String p : REQUIRED_PERMISSIONS) {
+            if (ContextCompat.checkSelfPermission(this, p) != PackageManager.PERMISSION_GRANTED) {
+              allGranted = false;
+              break;
+            }
+          }
+          if (allGranted) {
+            setupFragments();
+          }
         } else {
           Toast.makeText(this, "需要存储权限", Toast.LENGTH_SHORT).show();
         }
@@ -620,21 +608,26 @@ public class MainActivity extends AppCompatActivity
     }
   }
 
-  /** Toggles the flag to allow Activity Recognition updates to change ground truth mode */
+  /**
+   * Toggles the flag to allow Activity Recognition updates to change ground truth
+   * mode
+   */
   public void setAutoSwitchGroundTruthModeEnabled(boolean enabled) {
     mAutoSwitchGroundTruthMode = enabled;
   }
 
   /**
    * A receiver for result of {@link
-   * ActivityRecognition#ActivityRecognitionApi#requestActivityUpdates()} broadcast by {@link
+   * ActivityRecognition#ActivityRecognitionApi#requestActivityUpdates()}
+   * broadcast by {@link
    * DetectedActivitiesIntentReceiver}
    */
   public class ActivityDetectionBroadcastReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
 
-      // Modify the status of mRealTimePositionVelocityCalculator only if the status is set to auto
+      // Modify the status of mRealTimePositionVelocityCalculator only if the status
+      // is set to auto
       // (indicated by mAutoSwitchGroundTruthMode).
       if (mAutoSwitchGroundTruthMode) {
         ActivityRecognitionResult result = ActivityRecognitionResult.extractResult(intent);
@@ -644,21 +637,24 @@ public class MainActivity extends AppCompatActivity
   }
 
   /**
-   * Sets up the ground truth mode of {@link RealTimePositionVelocityCalculator} given an result
-   * from Activity Recognition update. For activities other than {@link DetectedActivity#STILL} and
-   * {@link DetectedActivity#TILTING}, we conservatively assume the user is moving and use the last
+   * Sets up the ground truth mode of {@link RealTimePositionVelocityCalculator}
+   * given an result
+   * from Activity Recognition update. For activities other than
+   * {@link DetectedActivity#STILL} and
+   * {@link DetectedActivity#TILTING}, we conservatively assume the user is moving
+   * and use the last
    * WLS position solution as ground truth for corrected residual computation.
    */
   private void setGroundTruthModeOnResult(ActivityRecognitionResult result) {
     if (result != null) {
       int detectedActivityType = result.getMostProbableActivity().getType();
       if (detectedActivityType == DetectedActivity.STILL
-              || detectedActivityType == DetectedActivity.TILTING) {
+          || detectedActivityType == DetectedActivity.TILTING) {
         mRealTimePositionVelocityCalculator.setResidualPlotMode(
-                RealTimePositionVelocityCalculator.RESIDUAL_MODE_STILL, null);
+            RealTimePositionVelocityCalculator.RESIDUAL_MODE_STILL, null);
       } else {
         mRealTimePositionVelocityCalculator.setResidualPlotMode(
-                RealTimePositionVelocityCalculator.RESIDUAL_MODE_MOVING, null);
+            RealTimePositionVelocityCalculator.RESIDUAL_MODE_MOVING, null);
       }
     }
   }

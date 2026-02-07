@@ -31,8 +31,7 @@ import java.util.concurrent.TimeUnit;
 
 /** A {@link Service} to be bound to that exposes a timer. */
 public class TimerService extends Service {
-  static final String TIMER_ACTION =
-      String.format("%s.TIMER_UPDATE", TimerService.class.getPackage().getName());
+  static final String TIMER_ACTION = String.format("%s.TIMER_UPDATE", TimerService.class.getPackage().getName());
   static final String EXTRA_KEY_TYPE = "type";
   static final String EXTRA_KEY_UPDATE_REMAINING = "remaining";
   static final byte TYPE_UNKNOWN = -1;
@@ -44,6 +43,10 @@ public class TimerService extends Service {
   private final IBinder mBinder = new TimerBinder();
   private CountDownTimer mCountDownTimer;
   private boolean mTimerStarted;
+  private long mStartTimeMillis;
+  private boolean mIsCountDown;
+  private Runnable mCountUpRunnable;
+  private final android.os.Handler mHandler = new android.os.Handler();
 
   /** Handles response from {@link TimerFragment} */
   public interface TimerListener {
@@ -69,23 +72,21 @@ public class TimerService extends Service {
 
   @Override
   public IBinder onBind(Intent intent) {
-    NotificationChannelCompat channel =
-        new NotificationChannelCompat.Builder(
-                NOTIFICATION_CHANNEL_ID, NotificationManager.IMPORTANCE_DEFAULT)
-            .setName(getResources().getString(R.string.timer_service_notification_channel_name))
-            .setDescription(
-                getResources().getString(R.string.timer_service_notification_channel_description))
-            .build();
+    NotificationChannelCompat channel = new NotificationChannelCompat.Builder(
+        NOTIFICATION_CHANNEL_ID, NotificationManager.IMPORTANCE_DEFAULT)
+        .setName(getResources().getString(R.string.timer_service_notification_channel_name))
+        .setDescription(
+            getResources().getString(R.string.timer_service_notification_channel_description))
+        .build();
     NotificationManagerCompat manager = NotificationManagerCompat.from(this);
     manager.createNotificationChannel(channel);
-    Notification notification =
-        new NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
-            .setSmallIcon(R.mipmap.geolog2_round)
-            .setContentTitle("GeoLog 正在运行")
-            .setContentText("计时服务在前台运行")
-            .setOngoing(true)
-            .setOnlyAlertOnce(true)
-            .build();
+    Notification notification = new NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
+        .setSmallIcon(R.mipmap.geolog_round)
+        .setContentTitle("GeoLog 正在运行")
+        .setContentText("计时服务在前台运行")
+        .setOngoing(true)
+        .setOnlyAlertOnce(true)
+        .build();
     startForeground(NOTIFICATION_ID, notification);
     return mBinder;
   }
@@ -101,40 +102,68 @@ public class TimerService extends Service {
   void setTimer(TimerValues values) {
     // Only allow setting when not already running
     if (!mTimerStarted) {
-      mCountDownTimer =
-          new CountDownTimer(
-              values.getTotalMilliseconds(),
-              TimeUnit.MILLISECONDS.convert(1, TimeUnit.SECONDS) /* countDownInterval */) {
-            @Override
-            public void onTick(long millisUntilFinished) {
-              Intent broadcast = new Intent(TIMER_ACTION);
-              broadcast.putExtra(EXTRA_KEY_TYPE, TYPE_UPDATE);
-              broadcast.putExtra(EXTRA_KEY_UPDATE_REMAINING, millisUntilFinished);
-              LocalBroadcastManager.getInstance(TimerService.this).sendBroadcast(broadcast);
-            }
+      if (values.isZero()) {
+        mIsCountDown = false;
+        mCountDownTimer = null;
+      } else {
+        mIsCountDown = true;
+        mCountDownTimer = new CountDownTimer(
+            values.getTotalMilliseconds(),
+            TimeUnit.MILLISECONDS.convert(1, TimeUnit.SECONDS) /* countDownInterval */) {
+          @Override
+          public void onTick(long millisUntilFinished) {
+            Intent broadcast = new Intent(TIMER_ACTION);
+            broadcast.putExtra(EXTRA_KEY_TYPE, TYPE_UPDATE);
+            broadcast.putExtra(EXTRA_KEY_UPDATE_REMAINING, millisUntilFinished);
+            LocalBroadcastManager.getInstance(TimerService.this).sendBroadcast(broadcast);
+          }
 
-            @Override
-            public void onFinish() {
-              mTimerStarted = false;
-              Intent broadcast = new Intent(TIMER_ACTION);
-              broadcast.putExtra(EXTRA_KEY_TYPE, TYPE_FINISH);
-              LocalBroadcastManager.getInstance(TimerService.this).sendBroadcast(broadcast);
-            }
-          };
+          @Override
+          public void onFinish() {
+            mTimerStarted = false;
+            Intent broadcast = new Intent(TIMER_ACTION);
+            broadcast.putExtra(EXTRA_KEY_TYPE, TYPE_FINISH);
+            LocalBroadcastManager.getInstance(TimerService.this).sendBroadcast(broadcast);
+          }
+        };
+      }
     }
   }
 
   void startTimer() {
-    if ((mCountDownTimer != null) && !mTimerStarted) {
+    if (mTimerStarted)
+      return;
+
+    if (mIsCountDown && mCountDownTimer != null) {
       mCountDownTimer.start();
       mTimerStarted = true;
+    } else if (!mIsCountDown) {
+      mStartTimeMillis = android.os.SystemClock.elapsedRealtime();
+      mTimerStarted = true;
+      mCountUpRunnable = new Runnable() {
+        @Override
+        public void run() {
+          if (!mTimerStarted)
+            return;
+          long elapsed = android.os.SystemClock.elapsedRealtime() - mStartTimeMillis;
+          Intent broadcast = new Intent(TIMER_ACTION);
+          broadcast.putExtra(EXTRA_KEY_TYPE, TYPE_UPDATE);
+          broadcast.putExtra(EXTRA_KEY_UPDATE_REMAINING, -elapsed); // Negative indicates count-up
+          LocalBroadcastManager.getInstance(TimerService.this).sendBroadcast(broadcast);
+          mHandler.postDelayed(this, 1000);
+        }
+      };
+      mHandler.post(mCountUpRunnable);
     }
   }
 
   void stopTimer() {
+    mTimerStarted = false;
     if (mCountDownTimer != null) {
       mCountDownTimer.cancel();
-      mTimerStarted = false;
+    }
+    if (mCountUpRunnable != null) {
+      mHandler.removeCallbacks(mCountUpRunnable);
     }
   }
 }

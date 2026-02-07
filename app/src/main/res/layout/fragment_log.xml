@@ -1,82 +1,161 @@
-<?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:background="@android:color/white" >
+    android:background="@color/background_hud">
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal">
+        android:layout_height="match_parent"
+        android:orientation="vertical">
 
-        <Button
-            android:id="@+id/scroll_top"
-            android:layout_width="0dp"
+        <!-- Header Actions - Compact -->
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Start" />
+            android:orientation="horizontal"
+            android:padding="4dp"
+            android:background="@color/surface_hud">
 
-        <Button
-            android:id="@+id/clear_log"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Clear" />
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/scroll_top"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="TOP"
+                android:textColor="@color/primary"
+                app:icon="@android:drawable/arrow_up_float"
+                app:iconTint="@color/primary" />
 
-        <Button
-            android:id="@+id/scroll_bottom"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/clear_log"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="CLEAR"
+                android:textColor="@color/status_poor"
+                app:icon="@android:drawable/ic_menu_delete"
+                app:iconTint="@color/status_poor" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/scroll_bottom"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="END"
+                android:textColor="@color/primary"
+                app:icon="@android:drawable/arrow_down_float"
+                app:iconTint="@color/primary" />
+        </LinearLayout>
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/log_recycler"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
             android:layout_weight="1"
-            android:text="End" />
+            android:clipToPadding="false"
+            android:paddingBottom="88dp" />
+
+        <!-- Bottom Info Bar - HUD Refinement -->
+        <LinearLayout
+            android:id="@+id/bottom_bar_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- Row 1: Dedicated HUD Status Bar (Outside the white box area) -->
+            <LinearLayout
+                android:id="@+id/hud_status_bar"
+                android:layout_width="match_parent"
+                android:layout_height="32dp"
+                android:background="@color/primary"
+                android:gravity="center"
+                android:orientation="horizontal"
+                android:paddingHorizontal="16dp">
+
+                <TextView
+                    android:id="@+id/text_logging_status"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Ready"
+                    android:textColor="@android:color/white"
+                    android:textSize="13sp"
+                    android:fontFamily="sans-serif-medium" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:paddingHorizontal="8dp"
+                    android:text="·"
+                    android:textColor="@android:color/white"
+                    android:textSize="13sp" />
+
+                <TextView
+                    android:id="@+id/timer_display"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="00:00:00"
+                    android:textColor="@android:color/white"
+                    android:textSize="13sp"
+                    android:fontFamily="monospace" />
+            </LinearLayout>
+
+            <!-- Row 2: Main Control Area (The "White Box" context but simplified) -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@android:color/white"
+                android:padding="12dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <!-- Smart Action Button - Outlined Precision Style -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/start_stop_logs"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_weight="3"
+                        android:layout_height="56dp"
+                        android:text="Start Logging"
+                        android:textSize="14sp"
+                        android:textColor="@color/primary"
+                        android:textStyle="bold"
+                        app:cornerRadius="12dp"
+                        app:strokeWidth="1.5dp"
+                        app:strokeColor="@color/primary"
+                        app:icon="@android:drawable/ic_media_play"
+                        app:iconTint="@color/primary" />
+
+                    <!-- Timer Settings Button - Compact & Outlined -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/timer"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:layout_height="match_parent"
+                        android:layout_marginStart="8dp"
+                        android:text="Time"
+                        android:textSize="12sp"
+                        android:textColor="@color/primary"
+                        app:cornerRadius="12dp"
+                        app:strokeWidth="1.5dp"
+                        app:strokeColor="@color/primary"
+                        app:icon="@android:drawable/ic_menu_recent_history"
+                        app:iconSize="18dp"
+                        app:iconTint="@color/primary" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+        </LinearLayout>
+
     </LinearLayout>
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/log_recycler"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"/>
-
-    <LinearLayout
-        android:orientation="horizontal"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content">
-      <TextView
-          android:id="@+id/timer_display"
-          android:layout_width="match_parent"
-          android:layout_height="wrap_content"
-          android:layout_weight="1"
-          android:gravity="center_horizontal"
-          android:textStyle="bold" />
-
-    </LinearLayout>
-
-    <LinearLayout
-        android:orientation="horizontal"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content">
-        <Button
-            android:id="@+id/timer"
-            android:text="Timer"
-            android:layout_width="0dp"
-            android:layout_weight="1"
-            android:layout_height="wrap_content"/>
-
-        <Button
-            android:id="@+id/start_logs"
-            android:text="Start Log"
-            android:layout_width="0dp"
-            android:layout_weight="1"
-            android:layout_height="wrap_content"/>
-
-        <Button
-            android:id="@+id/send_file"
-            android:text="Stop &amp; Send"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"/>
-
-    </LinearLayout>
-
-</LinearLayout>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

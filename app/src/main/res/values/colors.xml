@@ -1,6 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="colorPrimary">#3F51B5</color>
-    <color name="colorPrimaryDark">#303F9F</color>
-    <color name="colorAccent">#FF4081</color>
+    <!-- HUD Theme Colors (Light Optimized) -->
+    <color name="primary">#0284C7</color> <!-- Stronger blue for light bg -->
+    <color name="primary_dark">#0369A1</color>
+    <color name="accent">#059669</color>
+    
+    <!-- Precision HUD Palette (Light Mode) -->
+    <color name="background_hud">#F1F5F9</color>
+    <color name="surface_hud">#FFFFFF</color>
+    <color name="on_surface_hud">#0F172A</color>
+    <color name="stroke_hud">#CBD5E1</color>
+    
+    <!-- Status Colors -->
+    <color name="status_good">#059669</color>
+    <color name="status_fair">#D97706</color>
+    <color name="status_poor">#DC2626</color>
+    
+    <!-- Status bar should be dark text on light bg -->
+    <color name="statusBarColor">#F1F5F9</color>
+    <color name="actionBarColor">#FFFFFF</color>
 </resources>

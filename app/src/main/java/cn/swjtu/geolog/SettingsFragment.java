@@ -37,13 +37,16 @@ import android.widget.CompoundButton.OnCheckedChangeListener;
 import android.widget.PopupWindow;
 import android.widget.PopupWindow.OnDismissListener;
 import android.widget.Spinner;
-import android.widget.Switch;
+import com.google.android.material.switchmaterial.SwitchMaterial;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.fragment.app.Fragment;
 import java.lang.reflect.InvocationTargetException;
 
-/** The UI fragment showing a set of configurable settings for the client to request GPS data. */
+/**
+ * The UI fragment showing a set of configurable settings for the client to
+ * request GPS data.
+ */
 public class SettingsFragment extends Fragment {
 
   public static final String TAG = ":SettingsFragment";
@@ -51,19 +54,24 @@ public class SettingsFragment extends Fragment {
   /** Position in the drop down menu of the auto ground truth mode */
   private static int AUTO_GROUND_TRUTH_MODE = 3;
 
-  /** Key in the {@link SharedPreferences} indicating whether auto-scroll has been enabled */
+  /**
+   * Key in the {@link SharedPreferences} indicating whether auto-scroll has been
+   * enabled
+   */
   protected static String PREFERENCE_KEY_AUTO_SCROLL = "autoScroll";
 
   private MeasurementProvider mGpsContainer;
   private HelpDialog helpDialog;
 
   private FileLogger mFileLogger;
+
   public void setFileLogger(FileLogger fileLogger) {
     this.mFileLogger = fileLogger;
   }
 
   /**
-   * The {@link RealTimePositionVelocityCalculator} set for receiving the ground truth mode switch
+   * The {@link RealTimePositionVelocityCalculator} set for receiving the ground
+   * truth mode switch
    */
   private RealTimePositionVelocityCalculator mRealTimePositionVelocityCalculator;
 
@@ -73,7 +81,9 @@ public class SettingsFragment extends Fragment {
   /** The reference ground truth location by user input. */
   private double[] mFixedReferenceLocation = null;
 
-  /** {@link GroundTruthModeSwitcher} to receive update from AR result broadcast */
+  /**
+   * {@link GroundTruthModeSwitcher} to receive update from AR result broadcast
+   */
   private GroundTruthModeSwitcher mModeSwitcher;
 
   @Override
@@ -106,7 +116,8 @@ public class SettingsFragment extends Fragment {
   }
 
   /**
-   * Set up {@code RealTimePositionVelocityCalculator} for receiving changes in ground truth mode
+   * Set up {@code RealTimePositionVelocityCalculator} for receiving changes in
+   * ground truth mode
    */
   public void setRealTimePositionVelocityCalculator(
       RealTimePositionVelocityCalculator realTimePositionVelocityCalculator) {
@@ -119,12 +130,11 @@ public class SettingsFragment extends Fragment {
     final View view = inflater.inflate(R.layout.fragment_main, container, false /* attachToRoot */);
 
     if (mGpsContainer == null && getActivity() instanceof MainActivity) {
-        mGpsContainer = ((MainActivity) getActivity()).getMeasurementProvider();
+      mGpsContainer = ((MainActivity) getActivity()).getMeasurementProvider();
     }
 
-    final Switch registerLocation = (Switch) view.findViewById(R.id.register_location);
-    final TextView registerLocationLabel =
-        (TextView) view.findViewById(R.id.register_location_label);
+    final SwitchMaterial registerLocation = (SwitchMaterial) view.findViewById(R.id.register_location);
+    final TextView registerLocationLabel = (TextView) view.findViewById(R.id.register_location_label);
     // set the switch to OFF
     registerLocation.setChecked(false);
     registerLocationLabel.setText("Switch is OFF");
@@ -134,13 +144,13 @@ public class SettingsFragment extends Fragment {
           @Override
           public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
             if (mGpsContainer == null) {
-                if (getActivity() instanceof MainActivity) {
-                   mGpsContainer = ((MainActivity) getActivity()).getMeasurementProvider();
-                }
-                if (mGpsContainer == null) {
-                    Toast.makeText(getContext(), "GPS Container not initialized", Toast.LENGTH_SHORT).show();
-                    return;
-                }
+              if (getActivity() instanceof MainActivity) {
+                mGpsContainer = ((MainActivity) getActivity()).getMeasurementProvider();
+              }
+              if (mGpsContainer == null) {
+                Toast.makeText(getContext(), "GPS Container not initialized", Toast.LENGTH_SHORT).show();
+                return;
+              }
             }
 
             if (isChecked) {
@@ -155,9 +165,8 @@ public class SettingsFragment extends Fragment {
           }
         });
 
-    final Switch registerMeasurements = (Switch) view.findViewById(R.id.register_measurements);
-    final TextView registerMeasurementsLabel =
-        (TextView) view.findViewById(R.id.register_measurement_label);
+    final SwitchMaterial registerMeasurements = (SwitchMaterial) view.findViewById(R.id.register_measurements);
+    final TextView registerMeasurementsLabel = (TextView) view.findViewById(R.id.register_measurement_label);
     // set the switch to OFF
     registerMeasurements.setChecked(false);
     registerMeasurementsLabel.setText("Switch is OFF");
@@ -167,10 +176,11 @@ public class SettingsFragment extends Fragment {
           @Override
           public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
             if (mGpsContainer == null) {
-                 if (getActivity() instanceof MainActivity) {
-                   mGpsContainer = ((MainActivity) getActivity()).getMeasurementProvider();
-                }
-                if (mGpsContainer == null) return;
+              if (getActivity() instanceof MainActivity) {
+                mGpsContainer = ((MainActivity) getActivity()).getMeasurementProvider();
+              }
+              if (mGpsContainer == null)
+                return;
             }
 
             if (isChecked) {
@@ -183,9 +193,8 @@ public class SettingsFragment extends Fragment {
           }
         });
 
-    final Switch registerNavigation = (Switch) view.findViewById(R.id.register_navigation);
-    final TextView registerNavigationLabel =
-        (TextView) view.findViewById(R.id.register_navigation_label);
+    final SwitchMaterial registerNavigation = (SwitchMaterial) view.findViewById(R.id.register_navigation);
+    final TextView registerNavigationLabel = (TextView) view.findViewById(R.id.register_navigation_label);
     // set the switch to OFF
     registerNavigation.setChecked(false);
     registerNavigationLabel.setText("Switch is OFF");
@@ -194,12 +203,13 @@ public class SettingsFragment extends Fragment {
 
           @Override
           public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-             if (mGpsContainer == null) {
-                 if (getActivity() instanceof MainActivity) {
-                   mGpsContainer = ((MainActivity) getActivity()).getMeasurementProvider();
-                 }
-                 if (mGpsContainer == null) return;
-             }
+            if (mGpsContainer == null) {
+              if (getActivity() instanceof MainActivity) {
+                mGpsContainer = ((MainActivity) getActivity()).getMeasurementProvider();
+              }
+              if (mGpsContainer == null)
+                return;
+            }
 
             if (isChecked) {
               mGpsContainer.registerNavigation();
@@ -211,9 +221,8 @@ public class SettingsFragment extends Fragment {
           }
         });
 
-    final Switch registerGpsStatus = (Switch) view.findViewById(R.id.register_status);
-    final TextView registerGpsStatusLabel =
-        (TextView) view.findViewById(R.id.register_status_label);
+    final SwitchMaterial registerGpsStatus = (SwitchMaterial) view.findViewById(R.id.register_status);
+    final TextView registerGpsStatusLabel = (TextView) view.findViewById(R.id.register_status_label);
     // set the switch to OFF
     registerGpsStatus.setChecked(false);
     registerGpsStatusLabel.setText("Switch is OFF");
@@ -222,12 +231,13 @@ public class SettingsFragment extends Fragment {
 
           @Override
           public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-             if (mGpsContainer == null) {
-                 if (getActivity() instanceof MainActivity) {
-                   mGpsContainer = ((MainActivity) getActivity()).getMeasurementProvider();
-                 }
-                 if (mGpsContainer == null) return;
-             }
+            if (mGpsContainer == null) {
+              if (getActivity() instanceof MainActivity) {
+                mGpsContainer = ((MainActivity) getActivity()).getMeasurementProvider();
+              }
+              if (mGpsContainer == null)
+                return;
+            }
 
             if (isChecked) {
               mGpsContainer.registerGnssStatus();
@@ -239,7 +249,7 @@ public class SettingsFragment extends Fragment {
           }
         });
 
-    final Switch registerNmea = (Switch) view.findViewById(R.id.register_nmea);
+    final SwitchMaterial registerNmea = (SwitchMaterial) view.findViewById(R.id.register_nmea);
     final TextView registerNmeaLabel = (TextView) view.findViewById(R.id.register_nmea_label);
     // set the switch to OFF
     registerNmea.setChecked(false);
@@ -249,12 +259,13 @@ public class SettingsFragment extends Fragment {
 
           @Override
           public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-             if (mGpsContainer == null) {
-                 if (getActivity() instanceof MainActivity) {
-                   mGpsContainer = ((MainActivity) getActivity()).getMeasurementProvider();
-                 }
-                 if (mGpsContainer == null) return;
-             }
+            if (mGpsContainer == null) {
+              if (getActivity() instanceof MainActivity) {
+                mGpsContainer = ((MainActivity) getActivity()).getMeasurementProvider();
+              }
+              if (mGpsContainer == null)
+                return;
+            }
 
             if (isChecked) {
               mGpsContainer.registerNmea();
@@ -265,15 +276,14 @@ public class SettingsFragment extends Fragment {
             }
           }
         });
-    final Switch autoScroll = (Switch) view.findViewById(R.id.auto_scroll_on);
+    final SwitchMaterial autoScroll = (SwitchMaterial) view.findViewById(R.id.auto_scroll_on);
     final TextView turnOnAutoScroll = (TextView) view.findViewById(R.id.turn_on_auto_scroll);
     turnOnAutoScroll.setText("Switch is OFF");
     autoScroll.setOnCheckedChangeListener(
         new OnCheckedChangeListener() {
           @Override
           public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-            SharedPreferences sharedPreferences =
-                PreferenceManager.getDefaultSharedPreferences(getActivity());
+            SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
             Editor editor = sharedPreferences.edit();
             if (isChecked) {
               editor.putBoolean(PREFERENCE_KEY_AUTO_SCROLL, true);
@@ -287,7 +297,7 @@ public class SettingsFragment extends Fragment {
           }
         });
 
-    final Switch registerRinex = view.findViewById(R.id.register_rinex);
+    final SwitchMaterial registerRinex = view.findViewById(R.id.register_rinex);
     final TextView registerRinexLabel = view.findViewById(R.id.register_rinex_label);
     // set the switch to OFF
     registerRinex.setChecked(false);
@@ -313,20 +323,19 @@ public class SettingsFragment extends Fragment {
       }
     });
 
-    final Switch residualPlotSwitch = (Switch) view.findViewById(R.id.residual_plot_enabled);
+    final SwitchMaterial residualPlotSwitch = (SwitchMaterial) view.findViewById(R.id.residual_plot_enabled);
     final TextView turnOnResidual = (TextView) view.findViewById(R.id.turn_on_residual_plot);
     turnOnResidual.setText("Switch is OFF");
     residualPlotSwitch.setOnCheckedChangeListener(
         new OnCheckedChangeListener() {
           @Override
-          public void onCheckedChanged(CompoundButton buttonView, boolean  isChecked) {
+          public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
             if (isChecked) {
 
-              LayoutInflater inflater =
-                  (LayoutInflater) getActivity().getSystemService(Context.LAYOUT_INFLATER_SERVICE);
-              View layout =
-                  inflater.inflate(
-                      R.layout.pop_up_window, (ViewGroup) getActivity().findViewById(R.id.pop));
+              LayoutInflater inflater = (LayoutInflater) getActivity()
+                  .getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+              View layout = inflater.inflate(
+                  R.layout.pop_up_window, (ViewGroup) getActivity().findViewById(R.id.pop));
 
               // Find UI elements in pop up window
               final Spinner residualSpinner = layout.findViewById(R.id.residual_spinner);
@@ -337,16 +346,14 @@ public class SettingsFragment extends Fragment {
               final TextView altitudeInput = layout.findViewById(R.id.altitude_input);
 
               // Set up pop up window attributes
-              final PopupWindow popupWindow =
-                  new PopupWindow(layout, LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
+              final PopupWindow popupWindow = new PopupWindow(layout, LayoutParams.WRAP_CONTENT,
+                  LayoutParams.WRAP_CONTENT);
               popupWindow.setOutsideTouchable(false);
               popupWindow.showAtLocation(
                   view.findViewById(R.id.setting_root), Gravity.CENTER, 0, 0);
               View container = (View) popupWindow.getContentView().getParent();
-              WindowManager wm =
-                  (WindowManager) getActivity().getSystemService(Context.WINDOW_SERVICE);
-              WindowManager.LayoutParams params =
-                  (WindowManager.LayoutParams) container.getLayoutParams();
+              WindowManager wm = (WindowManager) getActivity().getSystemService(Context.WINDOW_SERVICE);
+              WindowManager.LayoutParams params = (WindowManager.LayoutParams) container.getLayoutParams();
               params.flags = WindowManager.LayoutParams.FLAG_DIM_BEHIND;
               params.dimAmount = 0.5f;
               wm.updateViewLayout(container, params);
@@ -356,8 +363,7 @@ public class SettingsFragment extends Fragment {
                   new OnDismissListener() {
                     @Override
                     public void onDismiss() {
-                      if (mResidualSetting
-                          == RealTimePositionVelocityCalculator.RESIDUAL_MODE_DISABLED) {
+                      if (mResidualSetting == RealTimePositionVelocityCalculator.RESIDUAL_MODE_DISABLED) {
                         residualPlotSwitch.setChecked(false);
                       } else {
                         mRealTimePositionVelocityCalculator.setResidualPlotMode(
@@ -380,20 +386,16 @@ public class SettingsFragment extends Fragment {
                   new OnClickListener() {
                     @Override
                     public void onClick(View v) {
-                      double longitudeDegrees =
-                          longitudeInput.getText().toString().equals("")
-                              ? Double.NaN
-                              : Double.parseDouble(longitudeInput.getText().toString());
-                      double latitudeDegrees =
-                          latitudeInput.getText().toString().equals("")
-                              ? Double.NaN
-                              : Double.parseDouble(latitudeInput.getText().toString());
-                      double altitudeMeters =
-                          altitudeInput.getText().toString().equals("")
-                              ? Double.NaN
-                              : Double.parseDouble(altitudeInput.getText().toString());
-                      mFixedReferenceLocation =
-                          new double[] {latitudeDegrees, longitudeDegrees, altitudeMeters};
+                      double longitudeDegrees = longitudeInput.getText().toString().equals("")
+                          ? Double.NaN
+                          : Double.parseDouble(longitudeInput.getText().toString());
+                      double latitudeDegrees = latitudeInput.getText().toString().equals("")
+                          ? Double.NaN
+                          : Double.parseDouble(latitudeInput.getText().toString());
+                      double altitudeMeters = altitudeInput.getText().toString().equals("")
+                          ? Double.NaN
+                          : Double.parseDouble(altitudeInput.getText().toString());
+                      mFixedReferenceLocation = new double[] { latitudeDegrees, longitudeDegrees, altitudeMeters };
                       mResidualSetting = residualSpinner.getSelectedItemPosition();
 
                       // If user select auto, we need to put moving first and turn on AR updates
@@ -436,15 +438,36 @@ public class SettingsFragment extends Fragment {
           }
         });
 
-    final Switch keepScreenOn = (Switch) view.findViewById(R.id.keep_screen_on);
+    final SwitchMaterial keepScreenOn = (SwitchMaterial) view.findViewById(R.id.keep_screen_on);
+    final TextView keepScreenOnLabel = (TextView) view.findViewById(R.id.keep_screen_on_label);
+    boolean isKeepScreenOn = getActivity().getWindow().getAttributes().flags != 0
+        && (getActivity().getWindow().getAttributes().flags & WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) != 0;
+    keepScreenOn.setChecked(isKeepScreenOn);
+    keepScreenOnLabel.setText(isKeepScreenOn ? "Switch is ON" : "Switch is OFF");
     keepScreenOn.setOnCheckedChangeListener(new OnCheckedChangeListener() {
       @Override
       public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
         if (isChecked) {
           getActivity().getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+          keepScreenOnLabel.setText("Switch is ON");
         } else {
           getActivity().getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+          keepScreenOnLabel.setText("Switch is OFF");
         }
+      }
+    });
+
+    final SwitchMaterial autoDim = (SwitchMaterial) view.findViewById(R.id.auto_dim);
+    final TextView autoDimLabel = (TextView) view.findViewById(R.id.auto_dim_label);
+    SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
+    boolean isAutoDim = sharedPreferences.getBoolean("auto_dim_during_logging", false);
+    autoDim.setChecked(isAutoDim);
+    autoDimLabel.setText(isAutoDim ? "Switch is ON" : "Switch is OFF");
+    autoDim.setOnCheckedChangeListener(new OnCheckedChangeListener() {
+      @Override
+      public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+        sharedPreferences.edit().putBoolean("auto_dim_during_logging", isChecked).apply();
+        autoDimLabel.setText(isChecked ? "Switch is ON" : "Switch is OFF");
       }
     });
 

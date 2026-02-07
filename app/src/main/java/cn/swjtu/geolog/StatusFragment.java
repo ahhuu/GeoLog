@@ -54,8 +54,8 @@ public class StatusFragment extends Fragment implements MeasurementListener {
     private static final int ADR_STATE_CYCLE_SLIP = GnssMeasurement.ADR_STATE_CYCLE_SLIP;
     private static final int ADR_STATE_RESET = GnssMeasurement.ADR_STATE_RESET;
     // Measurement state bits
-    private static final int STATE_CODE_LOCK = 1;       // 2^0
-    private static final int STATE_TOW_DECODED = 8;     // 2^3
+    private static final int STATE_CODE_LOCK = 1; // 2^0
+    private static final int STATE_TOW_DECODED = 8; // 2^3
     private static final int STATE_MSEC_AMBIGUOUS = 16; // 2^4
     private static final int STATE_GLO_TOD_DECODED = 128; // 2^7
     private static final int STATE_GAL_E1C_2ND_CODE_LOCK = 2048; // 2^11
@@ -69,13 +69,14 @@ public class StatusFragment extends Fragment implements MeasurementListener {
 
     private FieldLogger fieldLogger;
     private static final String[] QUALITY_BAND_ORDER = {
-        "L1/E1/B1C", "L2", "L5/E5a/B2a", "E5b/B2b", "E5", "E6/L6", "B1I", "B3I",
-        "G1", "G2", "G3"
+            "L1/E1/B1C", "L2", "L5/E5a/B2a", "E5b/B2b", "E5", "E6/L6", "B1I", "B3I",
+            "G1", "G2", "G3"
     };
 
     @Nullable
     @Override
-    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
+            @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_status, container, false);
 
         mContainerQualityIndicators = view.findViewById(R.id.container_quality_indicators);
@@ -107,11 +108,12 @@ public class StatusFragment extends Fragment implements MeasurementListener {
             String cpuName = Build.HARDWARE;
             mTextHwYear.setText("HW Mod / Year: " + cpuName + " / " + (hwYear == 0 ? "Unknown" : hwYear));
         } catch (Exception e) {
-             String cpuName = Build.HARDWARE;
-             mTextHwYear.setText("HW Mod / Year: " + cpuName + " / Unknown");
+            String cpuName = Build.HARDWARE;
+            mTextHwYear.setText("HW Mod / Year: " + cpuName + " / Unknown");
         }
 
-        mTextPlatformInfo.setText("Plat / API Lvl: Android " + Build.VERSION.RELEASE + " / API " + Build.VERSION.SDK_INT);
+        mTextPlatformInfo
+                .setText("Plat / API Lvl: Android " + Build.VERSION.RELEASE + " / API " + Build.VERSION.SDK_INT);
 
     }
 
@@ -119,10 +121,10 @@ public class StatusFragment extends Fragment implements MeasurementListener {
     public void onResume() {
         super.onResume();
         if (getActivity() instanceof MainActivity) {
-             MeasurementProvider provider = ((MainActivity) getActivity()).getMeasurementProvider();
-             if (provider != null) {
-                 provider.addListener(this);
-             }
+            MeasurementProvider provider = ((MainActivity) getActivity()).getMeasurementProvider();
+            if (provider != null) {
+                provider.addListener(this);
+            }
         }
     }
 
@@ -130,20 +132,22 @@ public class StatusFragment extends Fragment implements MeasurementListener {
     public void onPause() {
         super.onPause();
         if (getActivity() instanceof MainActivity) {
-             MeasurementProvider provider = ((MainActivity) getActivity()).getMeasurementProvider();
-             if (provider != null) {
-                 provider.removeListener(this);
-             }
+            MeasurementProvider provider = ((MainActivity) getActivity()).getMeasurementProvider();
+            if (provider != null) {
+                provider.removeListener(this);
+            }
         }
     }
 
     @Override
     public void onGnssMeasurementsReceived(GnssMeasurementsEvent event) {
-        if (!isAdded() || getActivity() == null || getView() == null || event == null) return;
+        if (!isAdded() || getActivity() == null || getView() == null || event == null)
+            return;
         try {
             int n = (event.getMeasurements() != null) ? event.getMeasurements().size() : -1;
             fieldLogger.write("Measurements count=" + n);
-        } catch (Throwable ignore) {}
+        } catch (Throwable ignore) {
+        }
         getActivity().runOnUiThread(() -> {
             try {
                 updateUI(event);
@@ -154,24 +158,26 @@ public class StatusFragment extends Fragment implements MeasurementListener {
     }
 
     private void updateUI(GnssMeasurementsEvent event) {
-        if (event == null || event.getMeasurements() == null) return;
+        if (event == null || event.getMeasurements() == null)
+            return;
 
         GnssClock clock = event.getClock();
         if (clock != null) {
             if (clock.hasFullBiasNanos()) {
-                 long timeNanos = clock.getTimeNanos();
-                 double fullBiasNs = clock.getFullBiasNanos();
-                 double biasNs = clock.hasBiasNanos() ? clock.getBiasNanos() : 0.0;
-                 long gpsTimeNs = timeNanos - (long)(fullBiasNs + biasNs);
-                 // GPS Epoch (1980-01-06) to Unix Epoch (1970-01-01) is +315964800 seconds
-                 long gpsToUnixMs = 315964800000L;
-                 long timeMs = (gpsTimeNs / 1000000L) + gpsToUnixMs;
+                long timeNanos = clock.getTimeNanos();
+                double fullBiasNs = clock.getFullBiasNanos();
+                double biasNs = clock.hasBiasNanos() ? clock.getBiasNanos() : 0.0;
+                long gpsTimeNs = timeNanos - (long) (fullBiasNs + biasNs);
+                // GPS Epoch (1980-01-06) to Unix Epoch (1970-01-01) is +315964800 seconds
+                long gpsToUnixMs = 315964800000L;
+                long timeMs = (gpsTimeNs / 1000000L) + gpsToUnixMs;
 
-                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd / HH:mm:ss", Locale.US);
-                 sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
-                 mTextTimeDate.setText("GPS Date / Time: " + sdf.format(new Date(timeMs)));
+                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd / HH:mm:ss", Locale.US);
+                sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
+                mTextTimeDate.setText("GPS Date / Time: " + sdf.format(new Date(timeMs)));
             } else {
-                 mTextTimeDate.setText("Time (Sys): " + new SimpleDateFormat("yyyy-MM-dd / HH:mm:ss", Locale.US).format(new Date()));
+                mTextTimeDate.setText(
+                        "Time (Sys): " + new SimpleDateFormat("yyyy-MM-dd / HH:mm:ss", Locale.US).format(new Date()));
             }
         }
 
@@ -185,12 +191,17 @@ public class StatusFragment extends Fragment implements MeasurementListener {
             String sysKey = getGroupKey(m); // Original key for System Status
 
             // Quality Stats - use Freq Label
-            if (!qualityMap.containsKey(freqLabel)) qualityMap.put(freqLabel, new QualityStats());
+            if (!qualityMap.containsKey(freqLabel))
+                qualityMap.put(freqLabel, new QualityStats());
             QualityStats stats = qualityMap.get(freqLabel);
             stats.total++;
-            if ((m.getAccumulatedDeltaRangeState() & ADR_STATE_VALID) != 0) stats.validAdr++;
-            if ((m.getAccumulatedDeltaRangeState() & ADR_STATE_CYCLE_SLIP) != 0  || (m.getAccumulatedDeltaRangeState() & ADR_STATE_RESET) != 0) stats.cycleSlip++;
-            if (m.getMultipathIndicator() == GnssMeasurement.MULTIPATH_INDICATOR_DETECTED) stats.multipath++;
+            if ((m.getAccumulatedDeltaRangeState() & ADR_STATE_VALID) != 0)
+                stats.validAdr++;
+            if ((m.getAccumulatedDeltaRangeState() & ADR_STATE_CYCLE_SLIP) != 0
+                    || (m.getAccumulatedDeltaRangeState() & ADR_STATE_RESET) != 0)
+                stats.cycleSlip++;
+            if (m.getMultipathIndicator() == GnssMeasurement.MULTIPATH_INDICATOR_DETECTED)
+                stats.multipath++;
 
             // C/N0 Map - use System Key (Restored)
             if (!cn0Map.containsKey(sysKey)) {
@@ -200,7 +211,7 @@ public class StatusFragment extends Fragment implements MeasurementListener {
 
             // Sys Status Map: [Total, Used, Unused] - Use System Key
             if (!sysStatusMap.containsKey(sysKey)) {
-                sysStatusMap.put(sysKey, new int[]{0, 0, 0});
+                sysStatusMap.put(sysKey, new int[] { 0, 0, 0 });
             }
             int[] counts = sysStatusMap.get(sysKey);
             counts[0]++; // Total
@@ -222,10 +233,12 @@ public class StatusFragment extends Fragment implements MeasurementListener {
         List<String> cn0Keys = new ArrayList<>(cn0Map.keySet());
         Collections.sort(cn0Keys);
         for (String key : cn0Keys) {
-            if (!cn0Map.containsKey(key)) continue;
+            if (!cn0Map.containsKey(key))
+                continue;
             List<Double> values = cn0Map.get(key);
             double avg = 0;
-            for (Double v : values) avg += v;
+            for (Double v : values)
+                avg += v;
             avg /= values.size();
 
             addHistogramRow(key, avg);
@@ -238,17 +251,28 @@ public class StatusFragment extends Fragment implements MeasurementListener {
     }
 
     private String getFrequencyGroupLabel(double freqMhz) {
-        if (Math.abs(freqMhz - 1575.42) < 5.0) return "L1/E1/B1C";
-        if (Math.abs(freqMhz - 1227.60) < 5.0) return "L2";
-        if (Math.abs(freqMhz - 1176.45) < 5.0) return "L5/E5a/B2a";
-        if (Math.abs(freqMhz - 1207.14) < 5.0) return "E5b/B2b";
-        if (Math.abs(freqMhz - 1191.795) < 5.0) return "E5";
-        if (Math.abs(freqMhz - 1278.75) < 5.0) return "E6/L6";
-        if (Math.abs(freqMhz - 1561.098) < 5.0) return "B1I";
-        if (Math.abs(freqMhz - 1268.52) < 5.0) return "B3I";
-        if (Math.abs(freqMhz - 1602.0) < 25.0) return "G1";
-        if (Math.abs(freqMhz - 1246.0) < 25.0) return "G2";
-        if (Math.abs(freqMhz - 1202.0) < 5.0) return "G3";
+        if (Math.abs(freqMhz - 1575.42) < 5.0)
+            return "L1/E1/B1C";
+        if (Math.abs(freqMhz - 1227.60) < 5.0)
+            return "L2";
+        if (Math.abs(freqMhz - 1176.45) < 5.0)
+            return "L5/E5a/B2a";
+        if (Math.abs(freqMhz - 1207.14) < 5.0)
+            return "E5b/B2b";
+        if (Math.abs(freqMhz - 1191.795) < 5.0)
+            return "E5";
+        if (Math.abs(freqMhz - 1278.75) < 5.0)
+            return "E6/L6";
+        if (Math.abs(freqMhz - 1561.098) < 5.0)
+            return "B1I";
+        if (Math.abs(freqMhz - 1268.52) < 5.0)
+            return "B3I";
+        if (Math.abs(freqMhz - 1602.0) < 25.0)
+            return "G1";
+        if (Math.abs(freqMhz - 1246.0) < 25.0)
+            return "G2";
+        if (Math.abs(freqMhz - 1202.0) < 5.0)
+            return "G3";
         return String.format(Locale.US, "%.1fMHz", freqMhz);
     }
 
@@ -256,7 +280,8 @@ public class StatusFragment extends Fragment implements MeasurementListener {
         List<String> ordered = new ArrayList<>();
         java.util.Set<String> remaining = new LinkedHashSet<>(keys);
         for (String k : QUALITY_BAND_ORDER) {
-            if (remaining.remove(k)) ordered.add(k);
+            if (remaining.remove(k))
+                ordered.add(k);
         }
         List<String> tail = new ArrayList<>(remaining);
         Collections.sort(tail);
@@ -267,16 +292,20 @@ public class StatusFragment extends Fragment implements MeasurementListener {
     private void updateQualityContainer(Map<String, QualityStats> qualityMap, List<String> sortedKeys) {
         mContainerQualityIndicators.removeAllViews();
 
-        int padding8 = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 8, getResources().getDisplayMetrics());
-        int marginBottom = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 8, getResources().getDisplayMetrics());
-        float elevation4 = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 4, getResources().getDisplayMetrics());
+        int padding8 = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 8,
+                getResources().getDisplayMetrics());
+        int marginBottom = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 8,
+                getResources().getDisplayMetrics());
+        float elevation4 = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 4,
+                getResources().getDisplayMetrics());
         float radius8 = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 8, getResources().getDisplayMetrics());
 
         for (String key : sortedKeys) {
             QualityStats stats = qualityMap.get(key);
 
             CardView card = new CardView(getContext());
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT);
             lp.setMargins(0, 0, 0, marginBottom); // Spacing between cards
             card.setLayoutParams(lp);
             card.setCardBackgroundColor(Color.WHITE);
@@ -306,7 +335,8 @@ public class StatusFragment extends Fragment implements MeasurementListener {
         LinearLayout row = new LinearLayout(getContext());
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        row.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
 
         TextView tvLabel = new TextView(getContext());
         tvLabel.setText(label);
@@ -318,11 +348,11 @@ public class StatusFragment extends Fragment implements MeasurementListener {
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f);
         pb.setLayoutParams(params);
         if (total > 0) {
-             pb.setMax(total);
-             pb.setProgress(count);
+            pb.setMax(total);
+            pb.setProgress(count);
         } else {
-             pb.setMax(100);
-             pb.setProgress(0);
+            pb.setMax(100);
+            pb.setProgress(0);
         }
         row.addView(pb);
 
@@ -330,7 +360,8 @@ public class StatusFragment extends Fragment implements MeasurementListener {
         String text = count + "/" + total;
         android.text.SpannableString ss = new android.text.SpannableString(text);
         ss.setSpan(new android.text.style.ForegroundColorSpan(countColor), 0, String.valueOf(count).length(), 0);
-        ss.setSpan(new android.text.style.ForegroundColorSpan(Color.BLACK), String.valueOf(count).length(), text.length(), 0);
+        ss.setSpan(new android.text.style.ForegroundColorSpan(Color.BLACK), String.valueOf(count).length(),
+                text.length(), 0);
         tvValue.setText(ss);
         tvValue.setPadding(16, 0, 0, 0);
         row.addView(tvValue);
@@ -348,7 +379,8 @@ public class StatusFragment extends Fragment implements MeasurementListener {
     private void addHistogramRow(String label, double avgCn0) {
         LinearLayout row = new LinearLayout(getContext());
         row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        row.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(0, 4, 0, 4);
 
@@ -363,13 +395,18 @@ public class StatusFragment extends Fragment implements MeasurementListener {
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f);
         pb.setLayoutParams(params);
         pb.setMax(60); // Max DBHz usually around 50-60
-        pb.setProgress((int)avgCn0);
+        pb.setProgress((int) avgCn0);
         // Change color based on system?
-        if (label.startsWith("GPS")) pb.setProgressTintList(android.content.res.ColorStateList.valueOf(Color.BLUE));
-        else if (label.startsWith("GAL")) pb.setProgressTintList(android.content.res.ColorStateList.valueOf(Color.MAGENTA));
-        else if (label.startsWith("BDS")) pb.setProgressTintList(android.content.res.ColorStateList.valueOf(Color.GREEN));
-        else if (label.startsWith("GLO")) pb.setProgressTintList(android.content.res.ColorStateList.valueOf(Color.RED));
-        else pb.setProgressTintList(android.content.res.ColorStateList.valueOf(Color.GRAY));
+        if (label.startsWith("GPS"))
+            pb.setProgressTintList(android.content.res.ColorStateList.valueOf(Color.BLUE));
+        else if (label.startsWith("GAL"))
+            pb.setProgressTintList(android.content.res.ColorStateList.valueOf(Color.MAGENTA));
+        else if (label.startsWith("BDS"))
+            pb.setProgressTintList(android.content.res.ColorStateList.valueOf(Color.GREEN));
+        else if (label.startsWith("GLO"))
+            pb.setProgressTintList(android.content.res.ColorStateList.valueOf(Color.RED));
+        else
+            pb.setProgressTintList(android.content.res.ColorStateList.valueOf(Color.GRAY));
 
         row.addView(pb);
 
@@ -438,13 +475,14 @@ public class StatusFragment extends Fragment implements MeasurementListener {
         String band = getCarrierFrequencyLabel(m.getConstellationType(), freqMhz);
 
         // 1. Reject ambiguous millisecond
-        if ((state & STATE_MSEC_AMBIGUOUS) != 0) return false;
+        if ((state & STATE_MSEC_AMBIGUOUS) != 0)
+            return false;
 
         // 2. Require decoded time (TOW / TOD)
-        boolean towDecoded = (sysId == SYS_GLO) ?
-                ((state & STATE_GLO_TOD_DECODED) != 0) :
-                ((state & STATE_TOW_DECODED) != 0);
-        if (!towDecoded) return false;
+        boolean towDecoded = (sysId == SYS_GLO) ? ((state & STATE_GLO_TOD_DECODED) != 0)
+                : ((state & STATE_TOW_DECODED) != 0);
+        if (!towDecoded)
+            return false;
 
         // 3. Require code lock with Galileo nuance
         boolean codeLock;
@@ -474,56 +512,103 @@ public class StatusFragment extends Fragment implements MeasurementListener {
     }
 
     private String getCarrierFrequencyLabel(int constellationType, double freqMhz) {
-         final double TOLERANCE = 5.0;
-         if (constellationType == GnssStatus.CONSTELLATION_GPS) {
-             if (Math.abs(freqMhz - 1575.42) < TOLERANCE) return "L1";
-             if (Math.abs(freqMhz - 1227.60) < TOLERANCE) return "L2";
-             if (Math.abs(freqMhz - 1176.45) < TOLERANCE) return "L5";
-         } else if (constellationType == GnssStatus.CONSTELLATION_GLONASS) {
-             if (Math.abs(freqMhz - 1602.0) < 15.0) return "G1";
-             if (Math.abs(freqMhz - 1246.0) < 15.0) return "G2";
-             if (Math.abs(freqMhz - 1202.025) < TOLERANCE) return "G3";
-         } else if (constellationType == GnssStatus.CONSTELLATION_GALILEO) {
-             if (Math.abs(freqMhz - 1575.42) < TOLERANCE) return "E1";
-             if (Math.abs(freqMhz - 1176.45) < TOLERANCE) return "E5a";
-             if (Math.abs(freqMhz - 1207.14) < TOLERANCE) return "E5b";
-             if (Math.abs(freqMhz - 1191.795) < TOLERANCE) return "E5";
-             if (Math.abs(freqMhz - 1278.75) < TOLERANCE) return "E6";
-         } else if (constellationType == GnssStatus.CONSTELLATION_BEIDOU) {
-             if (Math.abs(freqMhz - 1561.098) < TOLERANCE) return "B1I";
-             if (Math.abs(freqMhz - 1575.42) < TOLERANCE) return "B1C";
-             if (Math.abs(freqMhz - 1207.14) < TOLERANCE) return "B2b";
-             if (Math.abs(freqMhz - 1176.45) < TOLERANCE) return "B2a";
-             if (Math.abs(freqMhz - 1268.52) < TOLERANCE) return "B3I";
-         } else if (constellationType == GnssStatus.CONSTELLATION_QZSS) {
-             if (Math.abs(freqMhz - 1575.42) < TOLERANCE) return "L1";
-             if (Math.abs(freqMhz - 1227.60) < TOLERANCE) return "L2";
-             if (Math.abs(freqMhz - 1176.45) < TOLERANCE) return "L5";
-             if (Math.abs(freqMhz - 1278.75) < TOLERANCE) return "L6";
-         }
-         return String.format(Locale.US, "%.0fMHz", freqMhz);
+        final double TOLERANCE = 5.0;
+        if (constellationType == GnssStatus.CONSTELLATION_GPS) {
+            if (Math.abs(freqMhz - 1575.42) < TOLERANCE)
+                return "L1";
+            if (Math.abs(freqMhz - 1227.60) < TOLERANCE)
+                return "L2";
+            if (Math.abs(freqMhz - 1176.45) < TOLERANCE)
+                return "L5";
+        } else if (constellationType == GnssStatus.CONSTELLATION_GLONASS) {
+            if (Math.abs(freqMhz - 1602.0) < 15.0)
+                return "G1";
+            if (Math.abs(freqMhz - 1246.0) < 15.0)
+                return "G2";
+            if (Math.abs(freqMhz - 1202.025) < TOLERANCE)
+                return "G3";
+        } else if (constellationType == GnssStatus.CONSTELLATION_GALILEO) {
+            if (Math.abs(freqMhz - 1575.42) < TOLERANCE)
+                return "E1";
+            if (Math.abs(freqMhz - 1176.45) < TOLERANCE)
+                return "E5a";
+            if (Math.abs(freqMhz - 1207.14) < TOLERANCE)
+                return "E5b";
+            if (Math.abs(freqMhz - 1191.795) < TOLERANCE)
+                return "E5";
+            if (Math.abs(freqMhz - 1278.75) < TOLERANCE)
+                return "E6";
+        } else if (constellationType == GnssStatus.CONSTELLATION_BEIDOU) {
+            if (Math.abs(freqMhz - 1561.098) < TOLERANCE)
+                return "B1I";
+            if (Math.abs(freqMhz - 1575.42) < TOLERANCE)
+                return "B1C";
+            if (Math.abs(freqMhz - 1207.14) < TOLERANCE)
+                return "B2b";
+            if (Math.abs(freqMhz - 1176.45) < TOLERANCE)
+                return "B2a";
+            if (Math.abs(freqMhz - 1268.52) < TOLERANCE)
+                return "B3I";
+        } else if (constellationType == GnssStatus.CONSTELLATION_QZSS) {
+            if (Math.abs(freqMhz - 1575.42) < TOLERANCE)
+                return "L1";
+            if (Math.abs(freqMhz - 1227.60) < TOLERANCE)
+                return "L2";
+            if (Math.abs(freqMhz - 1176.45) < TOLERANCE)
+                return "L5";
+            if (Math.abs(freqMhz - 1278.75) < TOLERANCE)
+                return "L6";
+        }
+        return String.format(Locale.US, "%.0fMHz", freqMhz);
     }
 
     private String getSystemName(int type) {
-        switch(type) {
-            case GnssStatus.CONSTELLATION_GPS: return "GPS";
-            case GnssStatus.CONSTELLATION_GLONASS: return "GLO";
-            case GnssStatus.CONSTELLATION_GALILEO: return "GAL";
-            case GnssStatus.CONSTELLATION_BEIDOU: return "BDS";
-            case GnssStatus.CONSTELLATION_QZSS: return "QZS";
-            default: return "UNK";
+        switch (type) {
+            case GnssStatus.CONSTELLATION_GPS:
+                return "GPS";
+            case GnssStatus.CONSTELLATION_GLONASS:
+                return "GLO";
+            case GnssStatus.CONSTELLATION_GALILEO:
+                return "GAL";
+            case GnssStatus.CONSTELLATION_BEIDOU:
+                return "BDS";
+            case GnssStatus.CONSTELLATION_QZSS:
+                return "QZS";
+            default:
+                return "UNK";
         }
     }
 
-    public void onProviderEnabled(String provider) {}
-    public void onProviderDisabled(String provider) {}
-    public void onLocationChanged(Location location) {}
-    public void onLocationStatusChanged(String provider, int status, Bundle extras) {}
-    public void onGnssMeasurementsStatusChanged(int status) {}
-    public void onGnssNavigationMessageReceived(GnssNavigationMessage event) {}
-    public void onGnssNavigationMessageStatusChanged(int status) {}
-    public void onGnssStatusChanged(GnssStatus gnssStatus) {}
-    public void onListenerRegistration(String listener, boolean result) {}
-    public void onNmeaReceived(long l, String s) {}
-    public void onTTFFReceived(long l) {}
+    public void onProviderEnabled(String provider) {
+    }
+
+    public void onProviderDisabled(String provider) {
+    }
+
+    public void onLocationChanged(Location location) {
+    }
+
+    public void onLocationStatusChanged(String provider, int status, Bundle extras) {
+    }
+
+    public void onGnssMeasurementsStatusChanged(int status) {
+    }
+
+    public void onGnssNavigationMessageReceived(GnssNavigationMessage event) {
+    }
+
+    public void onGnssNavigationMessageStatusChanged(int status) {
+    }
+
+    public void onGnssStatusChanged(GnssStatus gnssStatus) {
+    }
+
+    public void onListenerRegistration(String listener, boolean result) {
+    }
+
+    public void onNmeaReceived(long l, String s) {
+    }
+
+    public void onTTFFReceived(long l) {
+    }
 }

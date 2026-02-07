@@ -1,66 +1,118 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:orientation="vertical"
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
-    android:background="@color/background_material_light"
+    app:cardBackgroundColor="@color/surface_hud"
+    app:cardCornerRadius="12dp"
+    app:strokeWidth="1dp"
+    app:strokeColor="@color/stroke_hud"
     android:id="@+id/pop">
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:textSize="@dimen/abc_text_size_title_material_toolbar"
-        android:textColor="@color/background_material_dark"
-        android:text="@string/please_select_ground_truth_mode"/>
+    
     <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content">
-      <TextView
-          android:layout_width="0dp"
-          android:layout_weight="1"
-          android:layout_height="wrap_content"
-          android:gravity="start"
-          android:text="@string/ground_solution_mode"/>
-      <Spinner
-          android:layout_width="0dp"
-          android:layout_weight="1"
-          android:layout_height="wrap_content"
-          android:gravity="end"
-          android:id="@+id/residual_spinner"
-          android:entries="@array/residual_options"
-          android:spinnerMode="dialog">
-      </Spinner>
-    </LinearLayout>
-    <EditText
-      android:layout_width="wrap_content"
-      android:layout_height="wrap_content"
-      android:id="@+id/latitude_input"
-      android:inputType="numberDecimal|numberSigned"
-      android:hint="@string/latitude_in_degrees"/>
-    <EditText
+        android:orientation="vertical"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:id="@+id/longitude_input"
-        android:inputType="numberDecimal|numberSigned"
-        android:hint="@string/longitude_in_degrees"/>
-    <EditText
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:id="@+id/altitude_input"
-        android:inputType="numberDecimal|numberSigned"
-        android:hint="@string/altitude_in_meters"/>
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal">
-      <Button
-          android:layout_width="wrap_content"
-          android:layout_height="wrap_content"
-          android:id="@+id/popup_button_ok"
-          android:text="@string/ok"/>
-      <Button
-          android:layout_width="wrap_content"
-          android:layout_height="wrap_content"
-          android:id="@+id/popup_button_cancel"
-          android:text="@string/cancel"/>
+        android:padding="20dp">
+        
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="18sp"
+            android:textColor="@color/primary"
+            android:textStyle="bold"
+            android:text="@string/please_select_ground_truth_mode"
+            android:layout_marginBottom="16dp"/>
+            
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="12dp">
+          <TextView
+              android:layout_width="wrap_content"
+              android:layout_height="wrap_content"
+              android:text="@string/ground_solution_mode"
+              android:textColor="@color/on_surface_hud"
+              android:textSize="14sp"
+              android:layout_marginEnd="12dp"/>
+          <Spinner
+              android:id="@+id/residual_spinner"
+              android:layout_width="wrap_content"
+              android:layout_height="wrap_content"
+              android:entries="@array/residual_options"
+              android:spinnerMode="dropdown"
+              android:theme="@style/Widget.AppCompat.Spinner.Underlined"/>
+        </LinearLayout>
+        
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/latitude_in_degrees"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+            app:hintTextColor="@color/primary"
+            app:boxStrokeColor="@color/primary"
+            android:layout_marginBottom="8dp">
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/latitude_input"
+                android:layout_width="240dp"
+                android:layout_height="wrap_content"
+                android:textColor="@color/on_surface_hud"
+                android:inputType="numberDecimal|numberSigned"/>
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/longitude_in_degrees"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+            app:hintTextColor="@color/primary"
+            app:boxStrokeColor="@color/primary"
+            android:layout_marginBottom="8dp">
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/longitude_input"
+                android:layout_width="240dp"
+                android:layout_height="wrap_content"
+                android:textColor="@color/on_surface_hud"
+                android:inputType="numberDecimal|numberSigned"/>
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/altitude_in_meters"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+            app:hintTextColor="@color/primary"
+            app:boxStrokeColor="@color/primary"
+            android:layout_marginBottom="16dp">
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/altitude_input"
+                android:layout_width="240dp"
+                android:layout_height="wrap_content"
+                android:textColor="@color/on_surface_hud"
+                android:inputType="numberDecimal|numberSigned"/>
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="end">
+          <com.google.android.material.button.MaterialButton
+              android:id="@+id/popup_button_cancel"
+              style="@style/Widget.Material3.Button.TextButton"
+              android:layout_width="wrap_content"
+              android:layout_height="wrap_content"
+              android:text="@string/cancel"
+              android:textColor="@color/on_surface_hud"
+              android:alpha="0.7"/>
+          <com.google.android.material.button.MaterialButton
+              android:id="@+id/popup_button_ok"
+              style="@style/Widget.Material3.Button.TonalButton"
+              android:layout_width="wrap_content"
+              android:layout_height="wrap_content"
+              android:text="@string/ok"
+              android:layout_marginStart="8dp"/>
+        </LinearLayout>
     </LinearLayout>
-</LinearLayout>
+</com.google.android.material.card.MaterialCardView>

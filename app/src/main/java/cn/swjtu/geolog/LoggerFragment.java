@@ -41,6 +41,9 @@ import android.widget.TextView;
 import android.widget.Toast;
 import android.view.View.OnClickListener;
 import android.content.SharedPreferences;
+import com.google.android.material.button.MaterialButton;
+import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
@@ -65,49 +68,52 @@ public class LoggerFragment extends Fragment implements TimerListener, Measureme
     private MeasurementAdapter mAdapter;
     private FileLogger mFileLogger;
     private UiLogger mUiLogger;
-    private Button mStartLog;
-    private Button mTimer;
-    private Button mSendFile;
+    private MaterialButton mTimer;
+    private MaterialButton mStartStopLogs;
     private TextView mTimerDisplay;
+    private TextView mLoggingStatus;
     private TimerService mTimerService;
-    private TimerValues mTimerValues =
-            new TimerValues(0 /* hours */, 0 /* minutes */, 0 /* seconds */);
+    private TimerValues mTimerValues = new TimerValues(0 /* hours */, 0 /* minutes */, 0 /* seconds */);
 
-    private final BroadcastReceiver mBroadcastReceiver =
-            new BroadcastReceiver() {
-                @Override
-                public void onReceive(Context context, Intent intent) {
-                    checkArgument(intent != null, "Intent is null");
-                    short intentType =
-                            intent.getByteExtra(TimerService.EXTRA_KEY_TYPE, TimerService.TYPE_UNKNOWN);
-                    switch (intentType) {
-                        case TimerService.TYPE_UPDATE:
-                        case TimerService.TYPE_FINISH:
-                            break;
-                        default:
-                            return;
-                    }
-                    TimerValues countdown =
-                            new TimerValues(intent.getLongExtra(TimerService.EXTRA_KEY_UPDATE_REMAINING, 0L));
-                    LoggerFragment.this.displayTimer(countdown, true /* countdownStyle */);
-                    if (intentType == TimerService.TYPE_FINISH) {
-                        LoggerFragment.this.stopAndSend();
-                    }
-                }
-            };
-    private ServiceConnection mConnection =
-            new ServiceConnection() {
-                @Override
-                public void onServiceConnected(ComponentName className, IBinder serviceBinder) {
-                    mTimerService = ((TimerBinder) serviceBinder).getService();
-                }
+    private final BroadcastReceiver mBroadcastReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            checkArgument(intent != null, "Intent is null");
+            short intentType = intent.getByteExtra(TimerService.EXTRA_KEY_TYPE, TimerService.TYPE_UNKNOWN);
+            switch (intentType) {
+                case TimerService.TYPE_UPDATE:
+                case TimerService.TYPE_FINISH:
+                    break;
+                default:
+                    return;
+            }
+            long remaining = intent.getLongExtra(TimerService.EXTRA_KEY_UPDATE_REMAINING, 0L);
+            if (remaining < 0) {
+                // Count-up mode
+                TimerValues elapsed = new TimerValues(Math.abs(remaining));
+                LoggerFragment.this.displayTimer(elapsed, true /* countdownStyle */);
+            } else {
+                TimerValues countdown = new TimerValues(remaining);
+                LoggerFragment.this.displayTimer(countdown, true /* countdownStyle */);
+            }
+            if (intentType == TimerService.TYPE_FINISH) {
+                LoggerFragment.this.stopAndSend();
+            }
+        }
+    };
+    private ServiceConnection mConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName className, IBinder serviceBinder) {
+            mTimerService = ((TimerBinder) serviceBinder).getService();
+        }
 
-                @Override
-                public void onServiceDisconnected(ComponentName className) {
-                    mTimerService = null;
-                }
-            };
+        @Override
+        public void onServiceDisconnected(ComponentName className) {
+            mTimerService = null;
+        }
+    };
 
+    private boolean mIsLogging = false;
     private final UIFragmentComponent mUiComponent = new UIFragmentComponent();
 
     public void setUILogger(UiLogger value) {
@@ -170,7 +176,7 @@ public class LoggerFragment extends Fragment implements TimerListener, Measureme
             currentFileLogger.setUiComponent(mUiComponent);
         }
 
-        Button clear = newView.findViewById(R.id.clear_log);
+        MaterialButton clear = newView.findViewById(R.id.clear_log);
         clear.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -178,7 +184,7 @@ public class LoggerFragment extends Fragment implements TimerListener, Measureme
             }
         });
 
-        Button scrollTop = newView.findViewById(R.id.scroll_top);
+        MaterialButton scrollTop = newView.findViewById(R.id.scroll_top);
         scrollTop.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -186,7 +192,7 @@ public class LoggerFragment extends Fragment implements TimerListener, Measureme
             }
         });
 
-        Button scrollBottom = newView.findViewById(R.id.scroll_bottom);
+        MaterialButton scrollBottom = newView.findViewById(R.id.scroll_bottom);
         scrollBottom.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -197,30 +203,31 @@ public class LoggerFragment extends Fragment implements TimerListener, Measureme
         });
 
         mTimerDisplay = newView.findViewById(R.id.timer_display);
+        mLoggingStatus = newView.findViewById(R.id.text_logging_status);
         mTimer = newView.findViewById(R.id.timer);
-        mStartLog = newView.findViewById(R.id.start_logs);
-        mSendFile = newView.findViewById(R.id.send_file);
+        mStartStopLogs = newView.findViewById(R.id.start_stop_logs);
 
         displayTimer(mTimerValues, false /* countdownStyle */);
         enableOptions(true /* start */);
 
-        mStartLog.setOnClickListener(
-                new View.OnClickListener() {
-                    @Override
-                    public void onClick(View view) {
-                        enableOptions(false /* start */);
-                        Toast.makeText(getContext(), R.string.start_message, Toast.LENGTH_LONG).show();
-                        mFileLogger.startNewLog();
-                        if (!mTimerValues.isZero() && (mTimerService != null)) {
-                            mTimerService.startTimer();
-                        }
-                    }
-                });
-
-        mSendFile.setOnClickListener(new View.OnClickListener() {
+        mStartStopLogs.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onClick(View view) {
-                stopAndSend();
+            public void onClick(View v) {
+                if (!mIsLogging) {
+                    // Start Logging
+                    enableOptions(false /* start */);
+                    Toast.makeText(getContext(), R.string.start_message, Toast.LENGTH_LONG).show();
+                    mFileLogger.startNewLog();
+                    if (mTimerService != null) {
+                        mTimerService.setTimer(mTimerValues); // Ensure current state is set
+                        mTimerService.startTimer();
+                    }
+                    // Broadcast logging started
+                    getContext().sendBroadcast(new Intent("cn.swjtu.geolog.LOGGING_STARTED"));
+                } else {
+                    // Stop Logging
+                    stopAndSend();
+                }
             }
         });
 
@@ -242,12 +249,21 @@ public class LoggerFragment extends Fragment implements TimerListener, Measureme
         Toast.makeText(getContext(), R.string.stop_message, Toast.LENGTH_LONG).show();
         displayTimer(mTimerValues, false /* countdownStyle */);
         mFileLogger.send();
+        // Broadcast logging stopped
+        getContext().sendBroadcast(new Intent("cn.swjtu.geolog.LOGGING_STOPPED"));
     }
 
     void displayTimer(TimerValues values, boolean countdownStyle) {
-        String content = countdownStyle ? values.toCountdownString() : values.toString();
-        mTimerDisplay.setText(
-                String.format("%s: %s", getResources().getString(R.string.timer_display), content));
+        mTimerDisplay.setVisibility(View.VISIBLE);
+        String content = (values.isZero() && !countdownStyle) ? "00:00:00"
+                : (countdownStyle ? values.toCountdownString() : values.toString());
+        mTimerDisplay.setText(content);
+
+        if (values.isZero() && !countdownStyle) {
+            mTimer.setText("Time");
+        } else {
+            mTimer.setText(""); // Clear text to show it's "active" or just keep it simple
+        }
     }
 
     @Override
@@ -267,14 +283,28 @@ public class LoggerFragment extends Fragment implements TimerListener, Measureme
     }
 
     private void enableOptions(boolean start) {
+        mIsLogging = !start;
         mTimer.setEnabled(start);
-        mStartLog.setEnabled(start);
-        mSendFile.setEnabled(!start);
+
+        if (start) {
+            mLoggingStatus.setText("Ready");
+            mStartStopLogs.setText("Start Logging");
+            mStartStopLogs.setIconResource(android.R.drawable.ic_media_play);
+        } else {
+            if (mTimerValues.isZero()) {
+                mLoggingStatus.setText("Logging");
+            } else {
+                mLoggingStatus.setText("Remaining");
+            }
+            mStartStopLogs.setText("Stop Logging & Send");
+            mStartStopLogs.setIconResource(android.R.drawable.ic_menu_send);
+        }
     }
 
     @Override
     public void onGnssMeasurementsReceived(GnssMeasurementsEvent event) {
-        if (getActivity() == null) return;
+        if (getActivity() == null)
+            return;
         getActivity().runOnUiThread(new Runnable() {
             @Override
             public void run() {
@@ -289,22 +319,44 @@ public class LoggerFragment extends Fragment implements TimerListener, Measureme
     }
 
     // Implicit implementations
-    public void onProviderEnabled(String provider) {}
-    public void onProviderDisabled(String provider) {}
-    public void onLocationChanged(Location location) {}
-    public void onLocationStatusChanged(String provider, int status, Bundle extras) {}
-    public void onGnssMeasurementsStatusChanged(int status) {}
-    public void onGnssNavigationMessageReceived(GnssNavigationMessage event) {}
-    public void onGnssNavigationMessageStatusChanged(int status) {}
-    public void onGnssStatusChanged(GnssStatus gnssStatus) {}
-    public void onListenerRegistration(String listener, boolean result) {}
-    public void onNmeaReceived(long l, String s) {}
-    public void onTTFFReceived(long l) {}
+    public void onProviderEnabled(String provider) {
+    }
+
+    public void onProviderDisabled(String provider) {
+    }
+
+    public void onLocationChanged(Location location) {
+    }
+
+    public void onLocationStatusChanged(String provider, int status, Bundle extras) {
+    }
+
+    public void onGnssMeasurementsStatusChanged(int status) {
+    }
+
+    public void onGnssNavigationMessageReceived(GnssNavigationMessage event) {
+    }
+
+    public void onGnssNavigationMessageStatusChanged(int status) {
+    }
+
+    public void onGnssStatusChanged(GnssStatus gnssStatus) {
+    }
+
+    public void onListenerRegistration(String listener, boolean result) {
+    }
+
+    public void onNmeaReceived(long l, String s) {
+    }
+
+    public void onTTFFReceived(long l) {
+    }
 
     public class UIFragmentComponent {
         public void logTextFragment(final String tag, final String text, int color) {
             // Disabled text logging to view
         }
+
         public void startActivity(Intent intent) {
             getActivity().startActivity(intent);
         }
@@ -362,11 +414,14 @@ public class LoggerFragment extends Fragment implements TimerListener, Measureme
         private String getCodeLabel(GnssMeasurement m, String band) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 String type = m.getCodeType();
-                if (type == null) return "";
+                if (type == null)
+                    return "";
                 // Mapping simplifications
                 if (m.getConstellationType() == GnssStatus.CONSTELLATION_GPS) {
-                    if ("C".equals(type)) return "C/A"; // Common mapping
-                    if ("P".equals(type)) return "P";
+                    if ("C".equals(type))
+                        return "C/A"; // Common mapping
+                    if ("P".equals(type))
+                        return "P";
                     // Add more mappings as needed
                 }
                 return type;
@@ -375,44 +430,70 @@ public class LoggerFragment extends Fragment implements TimerListener, Measureme
         }
 
         private String getCarrierFrequencyLabel(int constellationType, double freqMhz) {
-             final double TOLERANCE = 5.0; // MHz
-             if (constellationType == GnssStatus.CONSTELLATION_GPS) {
-                 if (Math.abs(freqMhz - 1575.42) < TOLERANCE) return "L1";
-                 if (Math.abs(freqMhz - 1227.60) < TOLERANCE) return "L2";
-                 if (Math.abs(freqMhz - 1176.45) < TOLERANCE) return "L5";
-             } else if (constellationType == GnssStatus.CONSTELLATION_GLONASS) {
-                 if (Math.abs(freqMhz - 1602.0) < 15.0) return "G1";
-                 if (Math.abs(freqMhz - 1246.0) < 15.0) return "G2";
-                 if (Math.abs(freqMhz - 1202.025) < TOLERANCE) return "G3";
-             } else if (constellationType == GnssStatus.CONSTELLATION_GALILEO) {
-                 if (Math.abs(freqMhz - 1575.42) < TOLERANCE) return "E1";
-                 if (Math.abs(freqMhz - 1176.45) < TOLERANCE) return "E5a";
-                 if (Math.abs(freqMhz - 1207.14) < TOLERANCE) return "E5b";
-                 if (Math.abs(freqMhz - 1191.795) < TOLERANCE) return "E5";
-                 if (Math.abs(freqMhz - 1278.75) < TOLERANCE) return "E6";
-             } else if (constellationType == GnssStatus.CONSTELLATION_BEIDOU) {
-                 if (Math.abs(freqMhz - 1561.098) < TOLERANCE) return "B1I";
-                 if (Math.abs(freqMhz - 1575.42) < TOLERANCE) return "B1C";
-                 if (Math.abs(freqMhz - 1207.14) < TOLERANCE) return "B2b"; // or B2I
-                 if (Math.abs(freqMhz - 1176.45) < TOLERANCE) return "B2a";
-                 if (Math.abs(freqMhz - 1268.52) < TOLERANCE) return "B3I";
-             } else if (constellationType == GnssStatus.CONSTELLATION_QZSS) {
-                 if (Math.abs(freqMhz - 1575.42) < TOLERANCE) return "L1";
-                 if (Math.abs(freqMhz - 1227.60) < TOLERANCE) return "L2";
-                 if (Math.abs(freqMhz - 1176.45) < TOLERANCE) return "L5";
-                 if (Math.abs(freqMhz - 1278.75) < TOLERANCE) return "L6";
-             }
-             return "";
+            final double TOLERANCE = 5.0; // MHz
+            if (constellationType == GnssStatus.CONSTELLATION_GPS) {
+                if (Math.abs(freqMhz - 1575.42) < TOLERANCE)
+                    return "L1";
+                if (Math.abs(freqMhz - 1227.60) < TOLERANCE)
+                    return "L2";
+                if (Math.abs(freqMhz - 1176.45) < TOLERANCE)
+                    return "L5";
+            } else if (constellationType == GnssStatus.CONSTELLATION_GLONASS) {
+                if (Math.abs(freqMhz - 1602.0) < 15.0)
+                    return "G1";
+                if (Math.abs(freqMhz - 1246.0) < 15.0)
+                    return "G2";
+                if (Math.abs(freqMhz - 1202.025) < TOLERANCE)
+                    return "G3";
+            } else if (constellationType == GnssStatus.CONSTELLATION_GALILEO) {
+                if (Math.abs(freqMhz - 1575.42) < TOLERANCE)
+                    return "E1";
+                if (Math.abs(freqMhz - 1176.45) < TOLERANCE)
+                    return "E5a";
+                if (Math.abs(freqMhz - 1207.14) < TOLERANCE)
+                    return "E5b";
+                if (Math.abs(freqMhz - 1191.795) < TOLERANCE)
+                    return "E5";
+                if (Math.abs(freqMhz - 1278.75) < TOLERANCE)
+                    return "E6";
+            } else if (constellationType == GnssStatus.CONSTELLATION_BEIDOU) {
+                if (Math.abs(freqMhz - 1561.098) < TOLERANCE)
+                    return "B1I";
+                if (Math.abs(freqMhz - 1575.42) < TOLERANCE)
+                    return "B1C";
+                if (Math.abs(freqMhz - 1207.14) < TOLERANCE)
+                    return "B2b"; // or B2I
+                if (Math.abs(freqMhz - 1176.45) < TOLERANCE)
+                    return "B2a";
+                if (Math.abs(freqMhz - 1268.52) < TOLERANCE)
+                    return "B3I";
+            } else if (constellationType == GnssStatus.CONSTELLATION_QZSS) {
+                if (Math.abs(freqMhz - 1575.42) < TOLERANCE)
+                    return "L1";
+                if (Math.abs(freqMhz - 1227.60) < TOLERANCE)
+                    return "L2";
+                if (Math.abs(freqMhz - 1176.45) < TOLERANCE)
+                    return "L5";
+                if (Math.abs(freqMhz - 1278.75) < TOLERANCE)
+                    return "L6";
+            }
+            return "";
         }
 
         private String getSystemName(int type) {
-            switch(type) {
-                case GnssStatus.CONSTELLATION_GPS: return "GPS";
-                case GnssStatus.CONSTELLATION_GLONASS: return "GLONASS";
-                case GnssStatus.CONSTELLATION_GALILEO: return "Galileo";
-                case GnssStatus.CONSTELLATION_BEIDOU: return "BDS";
-                case GnssStatus.CONSTELLATION_QZSS: return "QZSS";
-                default: return "Unknown";
+            switch (type) {
+                case GnssStatus.CONSTELLATION_GPS:
+                    return "GPS";
+                case GnssStatus.CONSTELLATION_GLONASS:
+                    return "GLONASS";
+                case GnssStatus.CONSTELLATION_GALILEO:
+                    return "Galileo";
+                case GnssStatus.CONSTELLATION_BEIDOU:
+                    return "BDS";
+                case GnssStatus.CONSTELLATION_QZSS:
+                    return "QZSS";
+                default:
+                    return "Unknown";
             }
         }
 
@@ -460,7 +541,7 @@ public class LoggerFragment extends Fragment implements TimerListener, Measureme
                 headQuality.setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View v) {
-                         toggle(contentQuality, mExpandedQuality);
+                        toggle(contentQuality, mExpandedQuality);
                     }
                 });
                 headUncertainty.setOnClickListener(new View.OnClickListener() {
@@ -473,7 +554,8 @@ public class LoggerFragment extends Fragment implements TimerListener, Measureme
 
             void toggle(View content, Map<String, Boolean> map) {
                 int pos = getAdapterPosition();
-                if (pos == RecyclerView.NO_POSITION) return;
+                if (pos == RecyclerView.NO_POSITION)
+                    return;
                 String key = mGroups.get(pos).title;
                 boolean isExpanded = content.getVisibility() == View.VISIBLE;
                 content.setVisibility(isExpanded ? View.GONE : View.VISIBLE);
@@ -482,15 +564,18 @@ public class LoggerFragment extends Fragment implements TimerListener, Measureme
 
             void bind(MeasurementGroup group) {
                 // Change "GPS L1 C/A" to "GNSSSignalInfo" as requested
-                // Reverted as per instruction 2: "GPS L1 C/A" to "GNSSSignalInfo"将这部分转换代码删除，恢复原样显示
+                // Reverted as per instruction 2: "GPS L1 C/A" to
+                // "GNSSSignalInfo"将这部分转换代码删除，恢复原样显示
                 title.setText(group.title);
                 // Access hardware clock directly as check method is missing in current env
                 hwClock.setText("HW Discontinuity: " + group.clock.getHardwareClockDiscontinuityCount());
 
                 // Restore Expansion
                 contentState.setVisibility(mExpandedState.getOrDefault(group.title, false) ? View.VISIBLE : View.GONE);
-                contentQuality.setVisibility(mExpandedQuality.getOrDefault(group.title, false) ? View.VISIBLE : View.GONE);
-                contentUncertainty.setVisibility(mExpandedUncertainty.getOrDefault(group.title, false) ? View.VISIBLE : View.GONE);
+                contentQuality
+                        .setVisibility(mExpandedQuality.getOrDefault(group.title, false) ? View.VISIBLE : View.GONE);
+                contentUncertainty.setVisibility(
+                        mExpandedUncertainty.getOrDefault(group.title, false) ? View.VISIBLE : View.GONE);
 
                 // Populate Content
                 StringBuilder stateSb = new StringBuilder();
@@ -521,28 +606,29 @@ public class LoggerFragment extends Fragment implements TimerListener, Measureme
                     // Start of line
                     String lineStart = "Svid " + m.getSvid() + ": ";
 
-                    if (stateSb.length() > 0) stateSb.append("<br>");
+                    if (stateSb.length() > 0)
+                        stateSb.append("<br>");
                     stateSb.append(lineStart).append(getStateString(m.getState()));
 
                     totalCn0 += m.getCn0DbHz();
                     count++;
 
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                         sumTimeUnc += m.getReceivedSvTimeUncertaintyNanos();
-                         countTimeUnc++;
+                        sumTimeUnc += m.getReceivedSvTimeUncertaintyNanos();
+                        countTimeUnc++;
 
-                         sumDopplerUnc += m.getPseudorangeRateUncertaintyMetersPerSecond();
-                         countDopplerUnc++;
+                        sumDopplerUnc += m.getPseudorangeRateUncertaintyMetersPerSecond();
+                        countDopplerUnc++;
 
-                         if (m.getAccumulatedDeltaRangeState() != GnssMeasurement.ADR_STATE_UNKNOWN) {
-                              sumAdrUnc += m.getAccumulatedDeltaRangeUncertaintyMeters();
-                              countAdrUnc++;
-                         }
+                        if (m.getAccumulatedDeltaRangeState() != GnssMeasurement.ADR_STATE_UNKNOWN) {
+                            sumAdrUnc += m.getAccumulatedDeltaRangeUncertaintyMeters();
+                            countAdrUnc++;
+                        }
 
-                         if (m.hasCarrierPhaseUncertainty()) {
+                        if (m.hasCarrierPhaseUncertainty()) {
                             sumPhaseUnc += m.getCarrierPhaseUncertainty();
                             countPhaseUnc++;
-                         }
+                        }
                     }
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                         if (m.hasBasebandCn0DbHz()) {
@@ -561,16 +647,19 @@ public class LoggerFragment extends Fragment implements TimerListener, Measureme
                 }
 
                 if (count > 0) {
-                    qualitySb.append("Avg C/N0: ").append(String.format(Locale.US, "%.1f dBHz", totalCn0/count)).append("\n");
+                    qualitySb.append("Avg C/N0: ").append(String.format(Locale.US, "%.1f dBHz", totalCn0 / count))
+                            .append("\n");
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && countBaseBandCn0 > 0) {
-                        qualitySb.append("Avg Base-Band C/N0: ").append(String.format(Locale.US, "%.1f dBHz", sumBaseBandCn0/countBaseBandCn0)).append("\n");
+                        qualitySb.append("Avg Base-Band C/N0: ")
+                                .append(String.format(Locale.US, "%.1f dBHz", sumBaseBandCn0 / countBaseBandCn0))
+                                .append("\n");
                     }
                 }
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                     contentState.setText(Html.fromHtml(stateSb.toString(), Html.FROM_HTML_MODE_LEGACY));
+                    contentState.setText(Html.fromHtml(stateSb.toString(), Html.FROM_HTML_MODE_LEGACY));
                 } else {
-                     contentState.setText(Html.fromHtml(stateSb.toString()));
+                    contentState.setText(Html.fromHtml(stateSb.toString()));
                 }
 
                 contentQuality.setText(qualitySb.toString());
@@ -579,47 +668,59 @@ public class LoggerFragment extends Fragment implements TimerListener, Measureme
 
                 // 4. Avg Time Uncertainty (Clock)
                 if (group.clock.hasTimeUncertaintyNanos()) {
-                    uncSb.append("Avg Time Uncertainty(ns): ").append(String.format(Locale.US, "%.1f", group.clock.getTimeUncertaintyNanos())).append("\n");
+                    uncSb.append("Avg Time Uncertainty(ns): ")
+                            .append(String.format(Locale.US, "%.1f", group.clock.getTimeUncertaintyNanos()))
+                            .append("\n");
                 }
 
                 // 5. Avg Bias Uncertainty (Clock)
                 if (group.clock.hasBiasUncertaintyNanos()) {
-                     uncSb.append("Avg Bias Uncertainty(ns): ").append(String.format(Locale.US, "%.1f", group.clock.getBiasUncertaintyNanos())).append("\n");
+                    uncSb.append("Avg Bias Uncertainty(ns): ")
+                            .append(String.format(Locale.US, "%.1f", group.clock.getBiasUncertaintyNanos()))
+                            .append("\n");
                 }
 
                 // 6. Avg Drift Uncertainty (Clock)
                 if (group.clock.hasDriftUncertaintyNanosPerSecond()) {
-                     uncSb.append("Avg Drift Uncertainty(ns): ").append(String.format(Locale.US, "%.1f", group.clock.getDriftUncertaintyNanosPerSecond())).append("\n");
+                    uncSb.append("Avg Drift Uncertainty(ns): ")
+                            .append(String.format(Locale.US, "%.1f", group.clock.getDriftUncertaintyNanosPerSecond()))
+                            .append("\n");
                 }
 
                 // 7. Avg Retime Uncertainty (Measurement)
                 if (countTimeUnc > 0) {
-                    uncSb.append("Avg Retime Uncertainty(ns): ").append(String.format(Locale.US, "%.1f", sumTimeUnc / countTimeUnc)).append("\n");
+                    uncSb.append("Avg Retime Uncertainty(ns): ")
+                            .append(String.format(Locale.US, "%.1f", sumTimeUnc / countTimeUnc)).append("\n");
                 }
 
                 // 8. Avg Doppler Uncertainty (Measurement)
                 if (countDopplerUnc > 0) {
-                    uncSb.append("Avg Doppler Uncertainty(m/s): ").append(String.format(Locale.US, "%.4f", sumDopplerUnc / countDopplerUnc)).append("\n");
+                    uncSb.append("Avg Doppler Uncertainty(m/s): ")
+                            .append(String.format(Locale.US, "%.4f", sumDopplerUnc / countDopplerUnc)).append("\n");
                 }
 
                 // 9. Avg ADR Uncertainty (Measurement)
                 if (countAdrUnc > 0) {
-                    uncSb.append("Avg ADR Uncertainty(m): ").append(String.format(Locale.US, "%.4f", sumAdrUnc / countAdrUnc)).append("\n");
+                    uncSb.append("Avg ADR Uncertainty(m): ")
+                            .append(String.format(Locale.US, "%.4f", sumAdrUnc / countAdrUnc)).append("\n");
                 }
 
                 // 10. Avg phase Uncertainty (Measurement)
                 if (countPhaseUnc > 0) {
-                     uncSb.append("Avg phase Uncertainty(cycle): ").append(String.format(Locale.US, "%.4f", sumPhaseUnc / countPhaseUnc)).append("\n");
+                    uncSb.append("Avg phase Uncertainty(cycle): ")
+                            .append(String.format(Locale.US, "%.4f", sumPhaseUnc / countPhaseUnc)).append("\n");
                 }
 
                 // 11. Avg Full inter-signal bias Uncertainty (Measurement - API 30)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && countFullIsbUnc > 0) {
-                     uncSb.append("Avg Full inter-signal bias Uncertainty(ns): ").append(String.format(Locale.US, "%.1f", sumFullIsbUnc / countFullIsbUnc)).append("\n");
+                    uncSb.append("Avg Full inter-signal bias Uncertainty(ns): ")
+                            .append(String.format(Locale.US, "%.1f", sumFullIsbUnc / countFullIsbUnc)).append("\n");
                 }
 
                 // 12. Avg Sat inter-signal bias Uncertainty (Measurement - API 30)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && countSatIsbUnc > 0) {
-                     uncSb.append("Avg Sat inter-signal bias Uncertainty(ns): ").append(String.format(Locale.US, "%.1f", sumSatIsbUnc / countSatIsbUnc)).append("\n");
+                    uncSb.append("Avg Sat inter-signal bias Uncertainty(ns): ")
+                            .append(String.format(Locale.US, "%.1f", sumSatIsbUnc / countSatIsbUnc)).append("\n");
                 }
 
                 contentUncertainty.setText(uncSb.toString());
@@ -660,8 +761,11 @@ public class LoggerFragment extends Fragment implements TimerListener, Measureme
         String title;
         List<GnssMeasurement> items;
         GnssClock clock;
+
         MeasurementGroup(String t, List<GnssMeasurement> i, GnssClock c) {
-            title = t; items = i; clock = c;
+            title = t;
+            items = i;
+            clock = c;
         }
     }
 }

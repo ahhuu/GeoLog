@@ -1,5 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+    <style name="AppTheme" parent="Theme.Material3.Light.NoActionBar">
+        <!-- 基础颜色 -->
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorPrimaryDark">@color/primary_dark</item>
+        <item name="colorAccent">@color/accent</item>
+        
+        <!-- 状态栏与导航栏 -->
+        <item name="android:statusBarColor">@color/background_hud</item>
+        <item name="android:navigationBarColor">@color/background_hud</item>
+        <item name="android:windowBackground">@color/background_hud</item>
+        
+        <!-- 开启亮色状态栏 (深色图标) -->
+        <item name="android:windowLightStatusBar">true</item>
     </style>
 </resources>
