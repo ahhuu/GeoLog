@@ -198,10 +198,11 @@ public class FileLogger implements MeasurementListener {
       Toast.makeText(mContext, "File opened: " + currentFilePath, Toast.LENGTH_SHORT).show();
 
       if (mRinexConversionEnabled) {
-          // Pass prefix and date to RinexLogger to handle new naming convention: new_FILEPREFIX_YYYY... .yyO
-          // Note: RinexLogger now expects "base filename" (without extension) or prefix.
-          // The Python script used: new_{basename}.{yy}o
-          // The basename here is fileName (e.g., gnss_log_2026_01_09...) without extension.
+          // Start RINEX logging.  The station name parameter is not currently used
+          // by the naming logic (defaults to GNSS00GEO) but is passed along in
+          // case callers want to provide custom identifiers in the future.
+          // logDate (now) is taken from the raw file name and drives the time
+          // component of the output name.
           String currentBaseName = fileName.replace(".txt", "");
           mRinexLogger.startNewLog(baseDirectory, currentBaseName, now);
           isRinexLogging = true;

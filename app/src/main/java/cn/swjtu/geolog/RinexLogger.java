@@ -90,12 +90,22 @@ public class RinexLogger {
     private RinexTime mFirstObsTime = null;
     private boolean mFirstObsSet = false;
 
+    // Track last observation time for duration
+    private RinexTime mLastObsTime = null;
+
     // Previous Epoch for Galileo check
     private List<RnxSat> mPreviousEpochSats = new ArrayList<>();
     private long mPreviousEpochTimeMillis = -1;
 
     // Position
     private double[] mApproxPos = new double[] { 0.0, 0.0, 0.0 };
+
+    // Naming components for output file
+    private String mStationName = "GNSS00GEO";
+    private String mSource = "R";   // receiver
+    private String mFru = "01S";    // sampling interval
+    private String mType = "MO";    // data type
+    private String mStartTimeStr = ""; // YYYYDDDHHMM
 
     // --- NEW: Helper Class for High Precision Time ---
     private static class RinexTime {
@@ -132,10 +142,30 @@ public class RinexLogger {
         mGlonassFreqMap.clear();
         mFirstObsSet = false;
         mFirstObsTime = null;
+        mLastObsTime = null;
+        mStartTimeStr = "";
         mLastHwClockDiscontinuityCount = -1;
     }
 
-    public void startNewLog(File baseDirectory, String filePrefix, Date logDate) {
+    /**
+     * Start a new RINEX log.  The file name is constructed using the pattern
+     * SSSSMMRRR_S_YYYYDDDHHMM_DDU_FRU_DT.fff described in the project
+     * requirements (station name, source, start time, duration, sample
+     * interval, data type, extension).
+     *
+     * @param baseDirectory base folder where "RINEX" subdirectory will be
+     *                      created if necessary.
+     * @param stationName   optional station identifier ("SSSSMMRRR").  If
+     *                      null/empty or not a valid 9‑character name, the
+     *                      default "GNSS00GEO" will be used.
+     *                      Previously this parameter was used as a prefix
+     *                      derived from the raw TXT file name; it is still
+     *                      passed from callers but is generally ignored.
+     * @param logDate       date/time derived from the incoming raw TXT file
+     *                      name (start of data).  Used to compute the
+     *                      YYYYDDDHHMM portion.
+     */
+    public void startNewLog(File baseDirectory, String stationName, Date logDate) {
         if (mIsLogging) {
             stopLog();
         }
@@ -146,12 +176,31 @@ public class RinexLogger {
             return;
         }
 
-        SimpleDateFormat yearFormat = new SimpleDateFormat("yy", Locale.US);
-        String yearSuffix = yearFormat.format(logDate);
-        String rinexFileName = String.format("geo_%s.%so", filePrefix, yearSuffix);
+        // Station name logic
+        if (stationName == null || stationName.isEmpty() || stationName.length() < 9 || !stationName.startsWith("GNSS")) {
+            stationName = "GNSS00GEO";
+        } else if (stationName.length() > 9) {
+            stationName = stationName.substring(0, 9);
+        }
+        mStationName = stationName;
+        mSource = "R"; // always receiver
+        mFru = "01S";
+        mType = "MO";
 
-        mRinexFile = new File(rinexDir, rinexFileName);
-        mTempBodyFile = new File(rinexDir, rinexFileName + ".tmp");
+        // start time string YYYYDDDHHMM
+        java.util.Calendar cal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"));
+        cal.setTime(logDate);
+        int year = cal.get(java.util.Calendar.YEAR);
+        int doy = cal.get(java.util.Calendar.DAY_OF_YEAR);
+        int hour = cal.get(java.util.Calendar.HOUR_OF_DAY);
+        int minute = cal.get(java.util.Calendar.MINUTE);
+        mStartTimeStr = String.format(Locale.US, "%04d%03d%02d%02d", year, doy, hour, minute);
+
+        // Build temporary/placeholder filename (duration unknown yet) and temp body file
+        String placeholderName = String.format(Locale.US, "%s_%s_%s_%s_%s_%s.%s",
+                mStationName, mSource, mStartTimeStr, "XX", mFru, mType, "rnx");
+        mRinexFile = new File(rinexDir, placeholderName);
+        mTempBodyFile = new File(rinexDir, placeholderName + ".tmp");
 
         try {
             mBodyWriter = new BufferedWriter(new FileWriter(mTempBodyFile));
@@ -172,7 +221,35 @@ public class RinexLogger {
             }
 
             if (mRinexFile != null && mTempBodyFile != null && mTempBodyFile.exists()) {
-                BufferedWriter finalWriter = new BufferedWriter(new FileWriter(mRinexFile));
+                // Determine duration string based on first/last observation times
+                String durationStr = "00S";
+                if (mFirstObsTime != null && mLastObsTime != null) {
+                    long diff = mLastObsTime.toRoughMillis() - mFirstObsTime.toRoughMillis();
+                    if (diff < 0)
+                        diff = 0;
+                    if (diff >= 86400000L) {
+                        int days = (int) Math.round(diff / 86400000.0);
+                        durationStr = String.format(Locale.US, "%02dD", days);
+                    } else if (diff >= 3600000L) {
+                        int hrs = (int) Math.round(diff / 3600000.0);
+                        durationStr = String.format(Locale.US, "%02dH", hrs);
+                    } else if (diff >= 60000L) {
+                        int mins = (int) Math.round(diff / 60000.0);
+                        durationStr = String.format(Locale.US, "%02dM", mins);
+                    } else {
+                        int secs = (int) Math.round(diff / 1000.0);
+                        if (secs == 0)
+                            secs = 1;
+                        durationStr = String.format(Locale.US, "%02dS", secs);
+                    }
+                }
+
+                // compute final file name using stored components
+                String finalName = String.format(Locale.US, "%s_%s_%s_%s_%s_%s.rnx",
+                        mStationName, mSource, mStartTimeStr, durationStr, mFru, mType);
+                File finalFile = new File(mRinexFile.getParentFile(), finalName);
+
+                BufferedWriter finalWriter = new BufferedWriter(new FileWriter(finalFile));
                 writeHeader(finalWriter);
 
                 BufferedReader bodyReader = new BufferedReader(new FileReader(mTempBodyFile));
@@ -185,6 +262,8 @@ public class RinexLogger {
                 finalWriter.close();
 
                 mTempBodyFile.delete();
+                // update reference to final file
+                mRinexFile = finalFile;
             }
         } catch (IOException e) {
             Log.e(TAG, "Error finalizing RINEX file", e);
@@ -344,6 +423,8 @@ public class RinexLogger {
 
         if (!epochSats.isEmpty()) {
             try {
+                // update last observation time (used later to compute file duration)
+                mLastObsTime = epochTime;
                 writeEpoch(epochTime, epochSats);
                 mPreviousEpochSats = epochSats;
                 mPreviousEpochTimeMillis = currentEpochMillis;
