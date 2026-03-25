@@ -34,6 +34,7 @@ import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.CompoundButton;
 import android.widget.CompoundButton.OnCheckedChangeListener;
+import android.widget.EditText;
 import android.widget.PopupWindow;
 import android.widget.PopupWindow.OnDismissListener;
 import android.widget.Spinner;
@@ -132,6 +133,7 @@ public class SettingsFragment extends Fragment {
     if (mGpsContainer == null && getActivity() instanceof MainActivity) {
       mGpsContainer = ((MainActivity) getActivity()).getMeasurementProvider();
     }
+    final SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
 
     final SwitchMaterial registerLocation = (SwitchMaterial) view.findViewById(R.id.register_location);
     final TextView registerLocationLabel = (TextView) view.findViewById(R.id.register_location_label);
@@ -283,7 +285,6 @@ public class SettingsFragment extends Fragment {
         new OnCheckedChangeListener() {
           @Override
           public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-            SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
             Editor editor = sharedPreferences.edit();
             if (isChecked) {
               editor.putBoolean(PREFERENCE_KEY_AUTO_SCROLL, true);
@@ -459,7 +460,6 @@ public class SettingsFragment extends Fragment {
 
     final SwitchMaterial autoDim = (SwitchMaterial) view.findViewById(R.id.auto_dim);
     final TextView autoDimLabel = (TextView) view.findViewById(R.id.auto_dim_label);
-    SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
     boolean isAutoDim = sharedPreferences.getBoolean("auto_dim_during_logging", false);
     autoDim.setChecked(isAutoDim);
     autoDimLabel.setText(isAutoDim ? "Switch is ON" : "Switch is OFF");
@@ -468,6 +468,79 @@ public class SettingsFragment extends Fragment {
       public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
         sharedPreferences.edit().putBoolean("auto_dim_during_logging", isChecked).apply();
         autoDimLabel.setText(isChecked ? "Switch is ON" : "Switch is OFF");
+      }
+    });
+
+    final EditText stationNameInput = view.findViewById(R.id.rinex_station_name_input);
+    final EditText markerNameInput = view.findViewById(R.id.rinex_marker_name_input);
+    final EditText markerNumberInput = view.findViewById(R.id.rinex_marker_number_input);
+    final Spinner markerTypeSpinner = view.findViewById(R.id.rinex_marker_type_spinner);
+    final EditText observerInput = view.findViewById(R.id.rinex_observer_input);
+    final EditText agencyInput = view.findViewById(R.id.rinex_agency_input);
+    final EditText receiverNumberInput = view.findViewById(R.id.rinex_receiver_number_input);
+    final EditText receiverTypeInput = view.findViewById(R.id.rinex_receiver_type_input);
+    final EditText receiverVersionInput = view.findViewById(R.id.rinex_receiver_version_input);
+    final EditText antennaNumberInput = view.findViewById(R.id.rinex_antenna_number_input);
+    final EditText antennaTypeInput = view.findViewById(R.id.rinex_antenna_type_input);
+    final EditText antennaDeltaHInput = view.findViewById(R.id.rinex_antenna_delta_h_input);
+    final EditText antennaDeltaEInput = view.findViewById(R.id.rinex_antenna_delta_e_input);
+    final EditText antennaDeltaNInput = view.findViewById(R.id.rinex_antenna_delta_n_input);
+    Button saveRinexSettings = view.findViewById(R.id.rinex_save_settings);
+
+    stationNameInput.setText(sharedPreferences.getString(FileLogger.PREF_RINEX_STATION_NAME, "GNSS00GEO"));
+    markerNameInput.setText(sharedPreferences.getString(FileLogger.PREF_RINEX_MARKER_NAME, "GeoLog"));
+    markerNumberInput.setText(sharedPreferences.getString(FileLogger.PREF_RINEX_MARKER_NUMBER, "Unknown"));
+    String markerType = sharedPreferences.getString(FileLogger.PREF_RINEX_MARKER_TYPE, "GEODETIC");
+    int markerTypeIndex = getSpinnerPosition(markerTypeSpinner, markerType);
+    if (markerTypeIndex >= 0) {
+      markerTypeSpinner.setSelection(markerTypeIndex);
+    }
+    observerInput.setText(sharedPreferences.getString(FileLogger.PREF_RINEX_OBSERVER, "SWJTU"));
+    agencyInput.setText(sharedPreferences.getString(FileLogger.PREF_RINEX_AGENCY, "SWJTU"));
+    receiverNumberInput.setText(sharedPreferences.getString(FileLogger.PREF_RINEX_RECEIVER_NUMBER, "Unknown"));
+    receiverTypeInput.setText(sharedPreferences.getString(
+      FileLogger.PREF_RINEX_RECEIVER_TYPE,
+      Build.MANUFACTURER + " " + Build.MODEL));
+    receiverVersionInput.setText(sharedPreferences.getString(FileLogger.PREF_RINEX_RECEIVER_VERSION, Build.VERSION.RELEASE));
+    antennaNumberInput.setText(sharedPreferences.getString(FileLogger.PREF_RINEX_ANTENNA_NUMBER, "unknown"));
+    antennaTypeInput.setText(sharedPreferences.getString(FileLogger.PREF_RINEX_ANTENNA_TYPE, "unknown"));
+    antennaDeltaHInput.setText(sharedPreferences.getString(FileLogger.PREF_RINEX_ANTENNA_DELTA_H, "0.0000"));
+    antennaDeltaEInput.setText(sharedPreferences.getString(FileLogger.PREF_RINEX_ANTENNA_DELTA_E, "0.0000"));
+    antennaDeltaNInput.setText(sharedPreferences.getString(FileLogger.PREF_RINEX_ANTENNA_DELTA_N, "0.0000"));
+
+    saveRinexSettings.setOnClickListener(new OnClickListener() {
+      @Override
+      public void onClick(View v) {
+        String deltaH = antennaDeltaHInput.getText().toString().trim();
+        String deltaE = antennaDeltaEInput.getText().toString().trim();
+        String deltaN = antennaDeltaNInput.getText().toString().trim();
+
+        if (!isValidDouble(deltaH) || !isValidDouble(deltaE) || !isValidDouble(deltaN)) {
+          Toast.makeText(getContext(), "Antenna Delta H/E/N must be numeric", Toast.LENGTH_SHORT).show();
+          return;
+        }
+
+        sharedPreferences.edit()
+            .putString(FileLogger.PREF_RINEX_STATION_NAME, stationNameInput.getText().toString().trim())
+            .putString(FileLogger.PREF_RINEX_MARKER_NAME, markerNameInput.getText().toString().trim())
+            .putString(FileLogger.PREF_RINEX_MARKER_NUMBER, markerNumberInput.getText().toString().trim())
+            .putString(FileLogger.PREF_RINEX_MARKER_TYPE, markerTypeSpinner.getSelectedItem().toString())
+            .putString(FileLogger.PREF_RINEX_OBSERVER, observerInput.getText().toString().trim())
+            .putString(FileLogger.PREF_RINEX_AGENCY, agencyInput.getText().toString().trim())
+            .putString(FileLogger.PREF_RINEX_RECEIVER_NUMBER, receiverNumberInput.getText().toString().trim())
+            .putString(FileLogger.PREF_RINEX_RECEIVER_TYPE, receiverTypeInput.getText().toString().trim())
+            .putString(FileLogger.PREF_RINEX_RECEIVER_VERSION, receiverVersionInput.getText().toString().trim())
+            .putString(FileLogger.PREF_RINEX_ANTENNA_NUMBER, antennaNumberInput.getText().toString().trim())
+            .putString(FileLogger.PREF_RINEX_ANTENNA_TYPE, antennaTypeInput.getText().toString().trim())
+            .putString(FileLogger.PREF_RINEX_ANTENNA_DELTA_H, deltaH)
+            .putString(FileLogger.PREF_RINEX_ANTENNA_DELTA_E, deltaE)
+            .putString(FileLogger.PREF_RINEX_ANTENNA_DELTA_N, deltaN)
+            .apply();
+
+        if (mFileLogger != null) {
+          mFileLogger.refreshRinexSettings();
+        }
+        Toast.makeText(getContext(), "RINEX settings saved", Toast.LENGTH_SHORT).show();
       }
     });
 
@@ -487,5 +560,29 @@ public class SettingsFragment extends Fragment {
   private void logException(String errorMessage, Exception e) {
     Log.e(MeasurementProvider.TAG + TAG, errorMessage, e);
     Toast.makeText(getContext(), errorMessage, Toast.LENGTH_LONG).show();
+  }
+
+  private int getSpinnerPosition(Spinner spinner, String value) {
+    if (spinner == null || value == null) {
+      return -1;
+    }
+    for (int i = 0; i < spinner.getCount(); i++) {
+      if (value.equalsIgnoreCase(String.valueOf(spinner.getItemAtPosition(i)))) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  private boolean isValidDouble(String value) {
+    if (value == null || value.isEmpty()) {
+      return false;
+    }
+    try {
+      Double.parseDouble(value);
+      return true;
+    } catch (NumberFormatException e) {
+      return false;
+    }
   }
 }

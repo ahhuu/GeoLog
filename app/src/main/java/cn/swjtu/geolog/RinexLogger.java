@@ -107,6 +107,38 @@ public class RinexLogger {
     private String mType = "MO";    // data type
     private String mStartTimeStr = ""; // YYYYDDDHHMM
 
+    // Configurable header fields
+    private String mMarkerName = "GeoLog";
+    private String mMarkerNumber = "Unknown";
+    private String mMarkerType = "GEODETIC";
+    private String mObserver = "SWJTU";
+    private String mAgency = "SWJTU";
+    private String mReceiverNumber = "Unknown";
+    private String mReceiverType = Build.MANUFACTURER + " " + Build.MODEL;
+    private String mReceiverVersion = Build.VERSION.RELEASE;
+    private String mAntennaNumber = "unknown";
+    private String mAntennaType = "unknown";
+    private double mAntennaDeltaH = 0.0;
+    private double mAntennaDeltaE = 0.0;
+    private double mAntennaDeltaN = 0.0;
+
+    public static class HeaderSettings {
+        public String stationName;
+        public String markerName;
+        public String markerNumber;
+        public String markerType;
+        public String observer;
+        public String agency;
+        public String receiverNumber;
+        public String receiverType;
+        public String receiverVersion;
+        public String antennaNumber;
+        public String antennaType;
+        public double antennaDeltaH;
+        public double antennaDeltaE;
+        public double antennaDeltaN;
+    }
+
     // --- NEW: Helper Class for High Precision Time ---
     private static class RinexTime {
         int year, month, day, hour, min;
@@ -132,6 +164,60 @@ public class RinexLogger {
     public RinexLogger(Context context) {
         mContext = context;
         resetSignals();
+    }
+
+    public void applyHeaderSettings(HeaderSettings settings) {
+        if (settings == null) {
+            return;
+        }
+        mStationName = normalizeStationName(settings.stationName);
+        mMarkerName = trimOrDefault(settings.markerName, "GeoLog");
+        mMarkerNumber = trimOrDefault(settings.markerNumber, "Unknown");
+        mMarkerType = trimOrDefault(settings.markerType, "GEODETIC");
+        mObserver = trimOrDefault(settings.observer, "SWJTU");
+        mAgency = trimOrDefault(settings.agency, "SWJTU");
+        mReceiverNumber = trimOrDefault(settings.receiverNumber, "Unknown");
+        mReceiverType = trimOrDefault(settings.receiverType, Build.MANUFACTURER + " " + Build.MODEL);
+        mReceiverVersion = trimOrDefault(settings.receiverVersion, Build.VERSION.RELEASE);
+        mAntennaNumber = trimOrDefault(settings.antennaNumber, "unknown");
+        mAntennaType = trimOrDefault(settings.antennaType, "unknown");
+        mAntennaDeltaH = settings.antennaDeltaH;
+        mAntennaDeltaE = settings.antennaDeltaE;
+        mAntennaDeltaN = settings.antennaDeltaN;
+    }
+
+    private String normalizeStationName(String stationName) {
+        String fallback = "GNSS00GEO";
+        if (stationName == null) {
+            return fallback;
+        }
+        String cleaned = stationName.trim().toUpperCase(Locale.US).replaceAll("[^A-Z0-9]", "");
+        if (cleaned.length() < 4) {
+            return fallback;
+        }
+        if (cleaned.length() > 9) {
+            return cleaned.substring(0, 9);
+        }
+        if (cleaned.length() < 9) {
+            return String.format(Locale.US, "%-9s", cleaned).replace(' ', '0');
+        }
+        return cleaned;
+    }
+
+    private String trimOrDefault(String value, String defaultValue) {
+        if (value == null) {
+            return defaultValue;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? defaultValue : trimmed;
+    }
+
+    private String fitField(String value, int width, String defaultValue) {
+        String v = trimOrDefault(value, defaultValue);
+        if (v.length() > width) {
+            return v.substring(0, width);
+        }
+        return v;
     }
 
     private void resetSignals() {
@@ -176,13 +262,8 @@ public class RinexLogger {
             return;
         }
 
-        // Station name logic
-        if (stationName == null || stationName.isEmpty() || stationName.length() < 9 || !stationName.startsWith("GNSS")) {
-            stationName = "GNSS00GEO";
-        } else if (stationName.length() > 9) {
-            stationName = stationName.substring(0, 9);
-        }
-        mStationName = stationName;
+        // Station name comes from settings and controls the output file name.
+        mStationName = normalizeStationName(mStationName);
         mSource = "R"; // always receiver
         mFru = "01S";
         mType = "MO";
@@ -742,18 +823,26 @@ public class RinexLogger {
         String runBy = Build.MANUFACTURER;
         if (runBy.length() > 20)
             runBy = runBy.substring(0, 20);
+        String receiverNumber = fitField(mReceiverNumber, 20, "Unknown");
+        String receiverType = fitField(mReceiverType, 20, Build.MANUFACTURER + " " + Build.MODEL);
+        String receiverVersion = fitField(mReceiverVersion, 20, Build.VERSION.RELEASE);
+        String antennaNumber = fitField(mAntennaNumber, 20, "unknown");
+        String antennaType = fitField(mAntennaType, 40, "unknown");
+        String observer = fitField(mObserver, 20, "SWJTU");
+        String agency = fitField(mAgency, 40, "SWJTU");
 
         writer.write(String.format(Locale.US, "%-20s%-20s%-20sPGM / RUN BY / DATE   \n", pgm, runBy, dateStr));
-        writer.write(String.format(Locale.US, "%-60sMARKER NAME         \n", "GeoLog"));
-        writer.write(String.format(Locale.US, "%-60sMARKER NUMBER       \n", "Unknown"));
-        writer.write(String.format(Locale.US, "%-60sMARKER TYPE         \n", "Unknown"));
-        writer.write(String.format(Locale.US, "%-20s%-40sOBSERVER / AGENCY   \n", "SWJTU", "SWJTU"));
-        writer.write(String.format(Locale.US, "%-20s%-40sREC # / TYPE / VERS \n", "Unknown",
-                Build.MANUFACTURER + " " + Build.MODEL + " " + Build.VERSION.RELEASE));
-        writer.write(String.format(Locale.US, "%-20s%-40sANT # / TYPE        \n", "unknown", "unknown"));
+        writer.write(String.format(Locale.US, "%-60sMARKER NAME         \n", mMarkerName));
+        writer.write(String.format(Locale.US, "%-60sMARKER NUMBER       \n", mMarkerNumber));
+        writer.write(String.format(Locale.US, "%-60sMARKER TYPE         \n", mMarkerType));
+        writer.write(String.format(Locale.US, "%-20s%-40sOBSERVER / AGENCY   \n", observer, agency));
+        writer.write(String.format(Locale.US, "%-20s%-20s%-20sREC # / TYPE / VERS \n",
+                receiverNumber, receiverType, receiverVersion));
+        writer.write(String.format(Locale.US, "%-20s%-40sANT # / TYPE        \n", antennaNumber, antennaType));
         writer.write(String.format(Locale.US, "%14.4f%14.4f%14.4f                  APPROX POSITION XYZ \n",
                 mApproxPos[0], mApproxPos[1], mApproxPos[2]));
-        writer.write("        0.0000        0.0000        0.0000                  ANTENNA: DELTA H/E/N\n");
+        writer.write(String.format(Locale.US, "%14.4f%14.4f%14.4f                  ANTENNA: DELTA H/E/N\n",
+            mAntennaDeltaH, mAntennaDeltaE, mAntennaDeltaN));
 
         char[] sysChars = { 'G', 'R', 'E', 'C', 'J' };
         int[] sysIds = { SYS_GPS, SYS_GLO, SYS_GAL, SYS_BDS, SYS_QZS };

@@ -18,6 +18,7 @@ package cn.swjtu.geolog;
 
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.location.GnssClock;
 import android.location.GnssMeasurement;
 import android.location.GnssMeasurementsEvent;
@@ -29,6 +30,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.SystemClock;
+import android.preference.PreferenceManager;
 import android.util.Log;
 import android.widget.Toast;
 import androidx.core.content.FileProvider;
@@ -55,6 +57,22 @@ public class FileLogger implements MeasurementListener {
   private static final char RECORD_DELIMITER = ',';
   private static final String VERSION_TAG = "Version: ";
 
+  public static final String PREF_RINEX_STATION_NAME = "rinex_station_name";
+  public static final String PREF_RINEX_MARKER_NAME = "rinex_marker_name";
+  public static final String PREF_RINEX_MARKER_NUMBER = "rinex_marker_number";
+  public static final String PREF_RINEX_MARKER_TYPE = "rinex_marker_type";
+  public static final String PREF_RINEX_OBSERVER = "rinex_observer";
+  public static final String PREF_RINEX_AGENCY = "rinex_agency";
+  public static final String PREF_RINEX_OBSERVER_AGENCY_LEGACY = "rinex_observer_agency";
+  public static final String PREF_RINEX_RECEIVER_NUMBER = "rinex_receiver_number";
+  public static final String PREF_RINEX_RECEIVER_TYPE = "rinex_receiver_type";
+  public static final String PREF_RINEX_RECEIVER_VERSION = "rinex_receiver_version";
+  public static final String PREF_RINEX_ANTENNA_NUMBER = "rinex_antenna_number";
+  public static final String PREF_RINEX_ANTENNA_TYPE = "rinex_antenna_type";
+  public static final String PREF_RINEX_ANTENNA_DELTA_H = "rinex_antenna_delta_h";
+  public static final String PREF_RINEX_ANTENNA_DELTA_E = "rinex_antenna_delta_e";
+  public static final String PREF_RINEX_ANTENNA_DELTA_N = "rinex_antenna_delta_n";
+
   private final RinexLogger mRinexLogger;
 
   private final Context mContext;
@@ -76,6 +94,52 @@ public class FileLogger implements MeasurementListener {
   public FileLogger(Context context) {
     this.mContext = context;
     this.mRinexLogger = new RinexLogger(context);
+    refreshRinexSettings();
+  }
+
+  public void refreshRinexSettings() {
+    mRinexLogger.applyHeaderSettings(loadRinexHeaderSettings());
+  }
+
+  private RinexLogger.HeaderSettings loadRinexHeaderSettings() {
+    SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(mContext);
+    RinexLogger.HeaderSettings settings = new RinexLogger.HeaderSettings();
+    settings.stationName = preferences.getString(PREF_RINEX_STATION_NAME, "GNSS00GEO");
+    settings.markerName = preferences.getString(PREF_RINEX_MARKER_NAME, "GeoLog");
+    settings.markerNumber = preferences.getString(PREF_RINEX_MARKER_NUMBER, "Unknown");
+    settings.markerType = preferences.getString(PREF_RINEX_MARKER_TYPE, "GEODETIC");
+    String legacyObserverAgency = preferences.getString(PREF_RINEX_OBSERVER_AGENCY_LEGACY, "SWJTU / SWJTU");
+    String defaultObserver = "SWJTU";
+    String defaultAgency = "SWJTU";
+    if (legacyObserverAgency != null && legacyObserverAgency.contains("/")) {
+      String[] parts = legacyObserverAgency.split("/", 2);
+      defaultObserver = parts[0].trim().isEmpty() ? "SWJTU" : parts[0].trim();
+      defaultAgency = parts[1].trim().isEmpty() ? "SWJTU" : parts[1].trim();
+    }
+    settings.observer = preferences.getString(PREF_RINEX_OBSERVER, defaultObserver);
+    settings.agency = preferences.getString(PREF_RINEX_AGENCY, defaultAgency);
+    settings.receiverNumber = preferences.getString(PREF_RINEX_RECEIVER_NUMBER, "Unknown");
+    settings.receiverType = preferences.getString(
+      PREF_RINEX_RECEIVER_TYPE,
+      Build.MANUFACTURER + " " + Build.MODEL);
+    settings.receiverVersion = preferences.getString(PREF_RINEX_RECEIVER_VERSION, Build.VERSION.RELEASE);
+    settings.antennaNumber = preferences.getString(PREF_RINEX_ANTENNA_NUMBER, "unknown");
+    settings.antennaType = preferences.getString(PREF_RINEX_ANTENNA_TYPE, "unknown");
+    settings.antennaDeltaH = parseDouble(preferences.getString(PREF_RINEX_ANTENNA_DELTA_H, "0.0000"), 0.0);
+    settings.antennaDeltaE = parseDouble(preferences.getString(PREF_RINEX_ANTENNA_DELTA_E, "0.0000"), 0.0);
+    settings.antennaDeltaN = parseDouble(preferences.getString(PREF_RINEX_ANTENNA_DELTA_N, "0.0000"), 0.0);
+    return settings;
+  }
+
+  private double parseDouble(String value, double defaultValue) {
+    if (value == null || value.trim().isEmpty()) {
+      return defaultValue;
+    }
+    try {
+      return Double.parseDouble(value.trim());
+    } catch (NumberFormatException e) {
+      return defaultValue;
+    }
   }
 
   /** Start a new file logging process. */
@@ -198,13 +262,13 @@ public class FileLogger implements MeasurementListener {
       Toast.makeText(mContext, "File opened: " + currentFilePath, Toast.LENGTH_SHORT).show();
 
       if (mRinexConversionEnabled) {
+          refreshRinexSettings();
           // Start RINEX logging.  The station name parameter is not currently used
           // by the naming logic (defaults to GNSS00GEO) but is passed along in
           // case callers want to provide custom identifiers in the future.
           // logDate (now) is taken from the raw file name and drives the time
           // component of the output name.
-          String currentBaseName = fileName.replace(".txt", "");
-          mRinexLogger.startNewLog(baseDirectory, currentBaseName, now);
+          mRinexLogger.startNewLog(baseDirectory, null, now);
           isRinexLogging = true;
           Toast.makeText(mContext, "RINEX log started", Toast.LENGTH_SHORT).show();
       }

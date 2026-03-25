@@ -370,6 +370,287 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
+        <!-- Card 4: APP SETTINGS (RINEX) -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            app:cardBackgroundColor="@android:color/white"
+            app:cardCornerRadius="12dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="@color/stroke_hud">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="8dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="APP SETTINGS (RINEX)"
+                    android:textColor="@color/primary"
+                    android:textSize="12sp"
+                    android:textStyle="bold"
+                    android:padding="8dp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp"
+                    android:text="Station Name (used in output file name, 4-9 chars, letters/digits)"
+                    android:textColor="#64748B"
+                    android:textSize="11sp" />
+                <EditText
+                    android:id="@+id/rinex_station_name_input"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginEnd="8dp"
+                    android:layout_marginBottom="8dp"
+                    android:hint="GNSS00GEO"
+                    android:inputType="text"
+                    android:maxLines="1"
+                    android:textSize="13sp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp"
+                    android:text="MARKER NAME (site name in RINEX header)"
+                    android:textColor="#64748B"
+                    android:textSize="11sp" />
+                <EditText
+                    android:id="@+id/rinex_marker_name_input"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginEnd="8dp"
+                    android:layout_marginBottom="8dp"
+                    android:hint="GeoLog"
+                    android:inputType="text"
+                    android:maxLines="1"
+                    android:textSize="13sp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp"
+                    android:text="MARKER NUMBER (marker identifier code)"
+                    android:textColor="#64748B"
+                    android:textSize="11sp" />
+                <EditText
+                    android:id="@+id/rinex_marker_number_input"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginEnd="8dp"
+                    android:layout_marginBottom="8dp"
+                    android:hint="Unknown"
+                    android:inputType="text"
+                    android:maxLines="1"
+                    android:textSize="13sp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp"
+                    android:text="MARKER TYPE (marker category)"
+                    android:textColor="#64748B"
+                    android:textSize="11sp" />
+                <Spinner
+                    android:id="@+id/rinex_marker_type_spinner"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginEnd="8dp"
+                    android:layout_marginBottom="8dp"
+                    android:entries="@array/rinex_marker_type_options" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp"
+                    android:text="OBSERVER / AGENCY (observer and organization)"
+                    android:textColor="#64748B"
+                    android:textSize="11sp" />
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginEnd="8dp"
+                    android:layout_marginBottom="8dp">
+
+                    <EditText
+                        android:id="@+id/rinex_observer_input"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="OBSERVER (e.g. SWJTU)"
+                        android:inputType="text"
+                        android:maxLines="1"
+                        android:textSize="13sp" />
+
+                    <EditText
+                        android:id="@+id/rinex_agency_input"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:hint="AGENCY (e.g. SWJTU)"
+                        android:inputType="text"
+                        android:maxLines="1"
+                        android:textSize="13sp" />
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp"
+                    android:text="REC # / TYPE / VERS (receiver number, type, version)"
+                    android:textColor="#64748B"
+                    android:textSize="11sp" />
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginEnd="8dp"
+                    android:layout_marginBottom="8dp">
+
+                    <EditText
+                        android:id="@+id/rinex_receiver_number_input"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="REC # (e.g. Unknown)"
+                        android:inputType="text"
+                        android:maxLines="1"
+                        android:textSize="13sp" />
+
+                    <EditText
+                        android:id="@+id/rinex_receiver_type_input"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:hint="TYPE (e.g. Google Pixel)"
+                        android:inputType="text"
+                        android:maxLines="1"
+                        android:textSize="13sp" />
+
+                    <EditText
+                        android:id="@+id/rinex_receiver_version_input"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:hint="VERS (e.g. Android 14)"
+                        android:inputType="text"
+                        android:maxLines="1"
+                        android:textSize="13sp" />
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp"
+                    android:text="ANT # / TYPE (antenna number and type)"
+                    android:textColor="#64748B"
+                    android:textSize="11sp" />
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginEnd="8dp"
+                    android:layout_marginBottom="8dp">
+
+                    <EditText
+                        android:id="@+id/rinex_antenna_number_input"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="ANT # (e.g. unknown)"
+                        android:inputType="text"
+                        android:maxLines="1"
+                        android:textSize="13sp" />
+
+                    <EditText
+                        android:id="@+id/rinex_antenna_type_input"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:hint="TYPE (e.g. unknown)"
+                        android:inputType="text"
+                        android:maxLines="1"
+                        android:textSize="13sp" />
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp"
+                    android:text="ANTENNA: DELTA H/E/N (meters)"
+                    android:textColor="#64748B"
+                    android:textSize="11sp" />
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginEnd="8dp"
+                    android:layout_marginBottom="8dp">
+
+                    <EditText
+                        android:id="@+id/rinex_antenna_delta_h_input"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="4dp"
+                        android:hint="H"
+                        android:inputType="numberDecimal|numberSigned"
+                        android:maxLines="1"
+                        android:textSize="13sp" />
+
+                    <EditText
+                        android:id="@+id/rinex_antenna_delta_e_input"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="4dp"
+                        android:layout_marginEnd="4dp"
+                        android:hint="E"
+                        android:inputType="numberDecimal|numberSigned"
+                        android:maxLines="1"
+                        android:textSize="13sp" />
+
+                    <EditText
+                        android:id="@+id/rinex_antenna_delta_n_input"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="4dp"
+                        android:hint="N"
+                        android:inputType="numberDecimal|numberSigned"
+                        android:maxLines="1"
+                        android:textSize="13sp" />
+                </LinearLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/rinex_save_settings"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="end"
+                    android:text="SAVE RINEX SETTINGS" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
         <!-- Footer Buttons -->
         <LinearLayout
             android:layout_width="match_parent"

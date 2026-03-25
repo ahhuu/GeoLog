@@ -84,4 +84,20 @@
         <item>CN0(dB.Hz) vs Time(s)</item>
         <item>Pseudorange residual(m) vs Time(s)</item>
     </string-array>
+    <string-array name="rinex_marker_type_options">
+        <item>GEODETIC</item>
+        <item>Non Geodetic</item>
+        <item>Non Physical</item>
+        <item>Space Borne</item>
+        <item>Air Borne</item>
+        <item>Water Craft</item>
+        <item>Ground Craft</item>
+        <item>Fixed Buoy</item>
+        <item>Floating Buoy</item>
+        <item>Floating Ice</item>
+        <item>GLACIER</item>
+        <item>Ballistic</item>
+        <item>Animal</item>
+        <item>Human</item>
+    </string-array>
 </resources>
